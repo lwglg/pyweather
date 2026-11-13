@@ -2,7 +2,7 @@ name: API — QA
 
 on:
   push:
-    branches: [main,master]
+    branches: [main]
     paths:
       - "services/api/**"
       - "pyproject.toml"

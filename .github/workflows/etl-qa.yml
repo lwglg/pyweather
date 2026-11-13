@@ -2,7 +2,7 @@ name: ETL — QA
 
 on:
   push:
-    branches: [main,master]
+    branches: [main]
     paths:
       - "services/etl/**"
       - "pyproject.toml"

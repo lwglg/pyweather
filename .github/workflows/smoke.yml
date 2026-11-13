@@ -1,0 +1,52 @@
+name: Smoke tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "infra/docker/**"
+      - "tests/postman/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "Makefile"
+      - "scripts/sh/smoke.sh"
+      - ".github/workflows/smoke.yml"
+  pull_request:
+    paths:
+      - "services/**"
+      - "infra/docker/**"
+      - "tests/postman/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "Makefile"
+      - "scripts/sh/smoke.sh"
+      - ".github/workflows/smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Stack em contêineres + collection Postman
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # Usa o mock da OpenWeather: não precisa de segredo nem de acesso à internet.
+      - name: Smoke tests (Docker Compose + Newman)
+        run: make smoke
+
+      - name: Publica o relatório JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-junit
+          path: build/smoke/newman-junit.xml
+          if-no-files-found: ignore
