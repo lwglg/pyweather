@@ -18,13 +18,13 @@ from pyweather_api.presentation.api.routers import health, locations
 
 
 DESCRIPTION = """
-API RESTful para consulta de **dados climáticos** extraídos da OpenWeather (One Call API 4.0)
+API RESTful para consulta de **dados climáticos** extraídos da OpenWeather (plano gratuito)
 e armazenados em PostgreSQL pelo serviço de ETL do projeto **pyweather**.
 
 * **Locais**: cidades monitoradas.
 * **Condições atuais**: observação mais recente e histórico acumulado.
-* **Previsões**: séries horária e diária.
-* **Alertas**: avisos meteorológicos oficiais.
+* **Previsões**: passos de 3 horas e resumo diário (5 dias).
+* **Alertas**: avisos meteorológicos oficiais (indisponíveis no plano gratuito).
 
 Todas as listagens são paginadas (`limit`/`offset`) e aceitam filtros específicos.
 Datas e horas são sempre retornadas em UTC (ISO 8601).

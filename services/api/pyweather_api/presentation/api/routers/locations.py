@@ -85,8 +85,8 @@ def current_history(
     response_model=PageOut[HourlyForecastOut],
     responses={**NOT_FOUND, **INVALID},
     summary="Previsão horária",
-    description="Previsões com passo de uma hora, com filtros por período, temperatura, "
-    "probabilidade de precipitação e condição.",
+    description="Previsões em passos curtos (3 horas, no plano gratuito da OpenWeather), com "
+    "filtros por período, temperatura, probabilidade de precipitação e condição.",
 )
 def hourly_forecast(
     service: Service, location_id: LocationId, query: Annotated[HourlyQuery, Query()]
@@ -100,8 +100,9 @@ def hourly_forecast(
     response_model=PageOut[DailyForecastOut],
     responses={**NOT_FOUND, **INVALID},
     summary="Previsão diária",
-    description="Previsões com passo de um dia (temperaturas por período, chuva, sol e lua), "
-    "com filtros por período, temperatura, probabilidade de precipitação e condição.",
+    description="Resumo diário derivado dos passos de 3 horas (mínima, máxima, média, chuva "
+    "acumulada e condição predominante), com filtros por período, temperatura, probabilidade "
+    "de precipitação e condição. Os campos de lua, sol e por período do dia podem vir nulos.",
 )
 def daily_forecast(
     service: Service, location_id: LocationId, query: Annotated[DailyQuery, Query()]
@@ -116,7 +117,8 @@ def daily_forecast(
     responses=NOT_FOUND,
     summary="Alertas meteorológicos",
     description="Alertas emitidos por agências nacionais, com filtros por evento, emissor "
-    "e vigência (`active_at`).",
+    "e vigência (`active_at`). O plano gratuito da OpenWeather não fornece alertas; a lista "
+    "permanece vazia, a menos que o banco seja alimentado por outra fonte.",
 )
 def alerts(
     service: Service, location_id: LocationId, query: Annotated[AlertQuery, Query()]
