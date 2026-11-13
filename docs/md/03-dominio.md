@@ -8,8 +8,8 @@
 |-------|-------------|
 | **Local** (`Location`) | Cidade monitorada, identificada por coordenadas. |
 | **Condições atuais** (`CurrentWeather`) | Observação do momento; o ETL acumula uma por instante, formando um **histórico**. |
-| **Previsão horária / diária** | Projeção por hora / por dia fornecida pela OpenWeather. |
-| **Alerta** (`WeatherAlert`) | Aviso oficial emitido por uma agência para um período. |
+| **Previsão (passos de 3 h) / resumo diário** | Passos de 3 horas fornecidos pela OpenWeather e o resumo diário derivado deles pelo ETL. |
+| **Alerta** (`WeatherAlert`) | Aviso oficial emitido por uma agência para um período (modelo e tabela mantidos; **não são preenchidos** no plano gratuito). |
 | **Extração** | Uma execução do ETL (`SyncReport`). |
 
 ## Domínio do ETL
@@ -68,7 +68,11 @@ classDiagram
         <<aggregate result>>
         +CurrentWeather weather
         +TimezoneInfo timezone
-        +tuple alert_ids
+    }
+    class Forecast {
+        <<aggregate result>>
+        +tuple steps
+        +tuple daily
     }
 
     class GeocodingProvider {
@@ -78,9 +82,7 @@ classDiagram
     class WeatherProvider {
         <<port>>
         +fetch_current(coords) CurrentSnapshot
-        +fetch_hourly(coords, pages) list
-        +fetch_daily(coords, pages) list
-        +fetch_alerts(ids) list
+        +fetch_forecast(coords) Forecast
     }
     class WeatherRepository {
         <<port>>
@@ -105,6 +107,8 @@ classDiagram
     LocationSpec --> Coordinates
     Location --> Coordinates
     CurrentSnapshot --> CurrentWeather
+    Forecast --> HourlyForecast
+    Forecast --> DailyForecast
     SyncWeatherUseCase --> GeocodingProvider
     SyncWeatherUseCase --> WeatherProvider
     SyncWeatherUseCase --> WeatherRepository
@@ -134,18 +138,29 @@ classDiagram
 | `Location` | `id` (atribuído na persistência); unicidade natural por coordenadas | Nome/estado/país são atualizados a cada extração |
 | `CurrentWeather` | `(location, observed_at)` | Temperatura, sensação, pressão, umidade, UV, nuvens, visibilidade, vento, precipitação, condição, nascer/pôr do sol |
 | `HourlyForecast` | `(location, forecast_at)` | Mesmos campos de `CurrentWeather` (exceto sol) + probabilidade de precipitação |
-| `DailyForecast` | `(location, forecast_at)` | Temperaturas por período, chuva/neve, sol e **lua** (`moonrise`, `moonset`, `moon_phase`) |
+| `DailyForecast` | `(location, forecast_at)` | Resumo do dia civil local: mínima, máxima e média, chuva/neve acumuladas, probabilidade máxima, condição predominante. Campos por período do dia, sol e **lua** ficam nulos |
 | `WeatherAlert` | `(location, alert_id)` | Vigência (`starts_at`…`ends_at`), emissor, evento, textos por idioma, etiquetas |
 
-`CurrentSnapshot` é o resultado da consulta de condições atuais: a observação, o fuso e os IDs de
-alertas ativos (cujos detalhes são obtidos em chamadas separadas).
+`CurrentSnapshot` é o resultado da consulta de condições atuais: a observação e o fuso horário.
+`Forecast` agrupa os passos de 3 h (`HourlyForecast`) e o resumo diário (`DailyForecast`) obtidos
+em **uma única** chamada.
+
+### Mapeamento do plano gratuito
+
+| Dado | Origem | Observações |
+|------|--------|-------------|
+| Condições atuais | `GET /data/2.5/weather` | `main.*`, `wind.*`, `clouds.all`, `rain.1h`, `sys.sunrise/sunset`. Sem UV nem ponto de orvalho (ficam nulos). |
+| Fuso horário | `timezone` (segundos) | O plano gratuito não informa o nome IANA: o nome é derivado do deslocamento (ex.: `UTC-03:00`). |
+| Passos de 3 h | `GET /data/2.5/forecast` | 40 passos (5 dias). `pop`, `rain.3h`, `snow.3h`. O volume de chuva de cada passo é o acumulado de **3 h** (mm), não de 1 h. A tabela `hourly_forecasts` guarda esses passos. |
+| Resumo diário | derivado dos passos | Agrupado por dia **civil local** (`city.timezone`). Mínima/máxima = extremos de `temp_min`/`temp_max`; `temp_day` = média das temperaturas; chuva/neve = soma; `pop` = máximo; vento = o passo mais forte; condição = a mais frequente. O 1º e o último dia podem ser **parciais** (a janela de 5 dias não começa à meia-noite). |
+| Alertas | — | Só existem na One Call API (paga). Nada é extraído; `GET /alerts` retorna lista vazia. |
 
 ### Portas
 
 | Porta | Implementação (infraestrutura) |
 |-------|--------------------------------|
 | `GeocodingProvider.locate` | `OpenWeatherClient` → `GET /geo/1.0/direct` |
-| `WeatherProvider.fetch_current / fetch_hourly / fetch_daily / fetch_alerts` | `OpenWeatherClient` → `GET /data/4.0/onecall/{current, timeline/1h, timeline/1day, alert/{id}}` |
+| `WeatherProvider.fetch_current / fetch_forecast` | `OpenWeatherClient` → `GET /data/2.5/weather` e `GET /data/2.5/forecast` |
 | `WeatherRepository.*` | `SqlAlchemyWeatherRepository` (`merge`/upsert por chave) |
 
 ### Erros do domínio (`PyWeatherError`)

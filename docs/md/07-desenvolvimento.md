@@ -46,7 +46,7 @@ serviço não dependa, sem querer, das bibliotecas do outro.
 | Smoke (ponta a ponta) | Postman/Newman + Docker Compose | `make smoke` | Todas as asserções passam ([seção 8](08-smoke-tests.md)) |
 | Diagramas | `scripts/sh/docs.sh` | `make docs` / `make docs-check` | Blocos Mermaid iguais aos `.mmd` |
 
-Todos aceitam `TARGET=etl|api|all`. Cobertura medida na escrita: **ETL 94,6 %** (94 testes) e
+Todos aceitam `TARGET=etl|api|all`. Cobertura medida na escrita: **ETL 94,5 %** (100 testes) e
 **API 100 %** (46 testes); a pasta de migrações (`env.py` e `versions/`) só é exercitada
 indiretamente, via `upgrade_to_head` nos testes.
 
@@ -79,7 +79,7 @@ grupo → `format-check` → `lint` → `typecheck` → `test` (falha abaixo de 
 
 | Variável | Padrão | Descrição |
 |----------|--------|-----------|
-| `OPENWEATHER_API_KEY` | — **(obrigatória)** | Chave da OpenWeather. Em Docker: `infra/docker/etl/.env.local` ou variável do shell |
+| `OPENWEATHER_API_KEY` | — **(obrigatória)** | Chave da OpenWeather (plano gratuito basta). Em Docker: `infra/docker/etl/.env.local` ou variável do shell |
 | `OPENWEATHER_BASE_URL` | `https://api.openweathermap.org` | Base das APIs |
 | `OPENWEATHER_UNITS` | `metric` | `standard`, `metric` ou `imperial` (veja o alerta sobre unidades em [Domínio](03-dominio.md)) |
 | `OPENWEATHER_LANG` | `pt_br` | Idioma das descrições |
@@ -87,8 +87,7 @@ grupo → `format-check` → `lint` → `typecheck` → `test` (falha abaixo de 
 | `CITY_NAME` / `CITY_STATE` / `CITY_COUNTRY` | `Florianópolis` / `Santa Catarina` / `BR` | Cidade-alvo (o estado só entra na busca para `US`) |
 | `CITY_LATITUDE` / `CITY_LONGITUDE` | — | Se **ambas** informadas, dispensam a geocodificação (informar só uma é erro) |
 | `ETL_INTERVAL_SECONDS` | `3600` (mín. 60) | Intervalo entre extrações no modo `serve` |
-| `ETL_HOURLY_PAGES` / `ETL_DAILY_PAGES` | `3` / `1` (0–10) | Páginas por extração (a API entrega até 20 horas e 10 dias por página); `0` desativa |
-| `ETL_INCLUDE_ALERTS` | `true` | Busca os detalhes dos alertas ativos |
+| `ETL_INCLUDE_FORECAST` | `true` | Busca a previsão de 5 dias (+1 chamada por extração); `false` extrai apenas as condições atuais |
 | `POSTGRES_*` · `DATABASE_URL` | veja [API](06-api.md#configuração-variáveis-de-ambiente-da-api) | Banco (no Compose, `POSTGRES_HOST=database`) |
 | `LOG_LEVEL` | `INFO` | Nível de log |
 
@@ -119,6 +118,11 @@ periódico; padrão da imagem), `healthcheck`.
   *daemon* Docker): o `docker-compose.yml` e o `docker-compose.smoke.yml` foram validados
   sintaticamente (`docker compose config`) e o passo de dependências dos Dockerfiles foi reproduzido
   com `uv`. Rode `make docker-build` e `make smoke` na primeira utilização.
-- A integração com a **One Call API 4.0** foi implementada conforme a documentação oficial
-  (caminhos, parâmetros e campos conferidos) e testada com respostas simuladas; **não foi exercitada
-  contra a API real**, por não haver chave durante o desenvolvimento.
+- **Plano gratuito da OpenWeather**: a *One Call API* (paga) não é usada — ela respondia HTTP 401 com
+  chaves gratuitas. A previsão tem passos de 3 h (não de 1 h) por 5 dias, o resumo diário é derivado
+  pelo ETL, e **não há alertas** (a tabela e o endpoint permanecem, vazios), índice UV, ponto de
+  orvalho ou dados lunares. Se migrar para um plano pago, será preciso um novo adaptador na
+  infraestrutura (o domínio e a API não mudam).
+- Os formatos de *Current Weather* e *5 Day / 3 Hour Forecast* foram implementados conforme a
+  documentação oficial e testados com respostas simuladas; **não foram exercitados contra a API
+  real** neste ambiente (sem chave).

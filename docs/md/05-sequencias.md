@@ -11,7 +11,7 @@ sequenceDiagram
     participant R as PeriodicRunner
     participant U as SyncWeatherUseCase
     participant G as OpenWeatherClient (geocoding)
-    participant P as OpenWeatherClient (one call)
+    participant P as OpenWeatherClient (weather/forecast)
     participant Repo as SqlAlchemyWeatherRepository
     participant DB as PostgreSQL
 
@@ -26,24 +26,14 @@ sequenceDiagram
         Repo-->>U: Location com id
     end
     U->>P: fetch_current(coordinates)
-    P-->>U: CurrentSnapshot (observação, fuso, alert_ids)
+    P-->>U: CurrentSnapshot (observação e fuso)
     U->>Repo: update_timezone() + save_current()
     Repo->>DB: UPSERT (merge) current_weather
-    loop páginas horárias (1h)
-        U->>P: fetch_hourly(coordinates, pages)
-        P-->>U: HourlyForecast[] (segue "next")
-    end
-    U->>Repo: save_hourly()
-    Repo->>DB: UPSERT hourly_forecasts
-    U->>P: fetch_daily(coordinates, pages)
-    P-->>U: DailyForecast[]
-    U->>Repo: save_daily()
-    Repo->>DB: UPSERT daily_forecasts
-    opt há alert_ids e include_alerts
-        U->>P: fetch_alerts(alert_ids)
-        P-->>U: WeatherAlert[]
-        U->>Repo: save_alerts()
-        Repo->>DB: UPSERT weather_alerts
+    opt ETL_INCLUDE_FORECAST
+        U->>P: fetch_forecast(coordinates)
+        P-->>U: Forecast (passos de 3 h + resumo diário derivado)
+        U->>Repo: save_hourly() + save_daily()
+        Repo->>DB: UPSERT hourly_forecasts e daily_forecasts
     end
     U-->>R: SyncReport
     Note over R: aguarda ETL_INTERVAL_SECONDS<br/>(interrompível por SIGTERM/SIGINT)
@@ -56,9 +46,8 @@ Notas:
 - Cada operação do repositório é uma **transação própria**; uma falha numa etapa (ex.: previsão
   diária) não desfaz o que já foi gravado em etapas anteriores — e como a carga é idempotente, a
   próxima execução completa o que faltou.
-- As linhas do tempo são paginadas pela OpenWeather: o cliente segue o campo `next` até
-  `ETL_HOURLY_PAGES` / `ETL_DAILY_PAGES` páginas (cada página é uma chamada à API) e descarta
-  registros duplicados entre páginas.
+- A previsão de 5 dias vem em **uma única chamada**: o mapeador ordena os passos, descarta
+  duplicados e deriva o resumo diário por dia civil local ([regras](03-dominio.md#mapeamento-do-plano-gratuito)).
 - O `PeriodicRunner` captura exceções do ciclo (log com *stack trace*) e continua; `SIGTERM`/`SIGINT`
   interrompem a espera e encerram graciosamente após o ciclo corrente.
 
@@ -71,7 +60,7 @@ sequenceDiagram
     participant C as OpenWeatherClient
     participant OW as OpenWeather
 
-    C->>OW: GET /data/4.0/onecall/current
+    C->>OW: GET /data/2.5/weather
     OW-->>C: 503 (ou 429 / falha de rede)
     Note over C: espera Retry-After (máx. 60 s)<br/>ou recuo exponencial 1 s, 2 s, 4 s…
     C->>OW: nova tentativa
@@ -83,8 +72,8 @@ sequenceDiagram
 | Resposta | Comportamento |
 |----------|---------------|
 | 200 | Converte o JSON; formato inesperado → `PayloadError` |
-| 401 | `AuthenticationError` imediato (chave inválida ou sem acesso ao produto) |
-| 404 | `ResourceNotFoundError` (para alertas, é ignorado com *warning*) |
+| 401 | `AuthenticationError` imediato (chave inválida, ainda não ativada ou sem acesso ao produto) |
+| 404 | `ResourceNotFoundError` |
 | 429, 500, 502, 503, 504, falha de rede | Até `HTTP_MAX_RETRIES` novas tentativas: espera `Retry-After` (limitado a 60 s) ou `1 s × 2ⁿ`; esgotadas → `RateLimitError` / `ProviderUnavailableError` |
 | outros 4xx | `WeatherProviderError` |
 

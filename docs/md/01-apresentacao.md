@@ -5,7 +5,7 @@
 ## O que é o pyweather
 
 Plataforma de software que **coleta dados climáticos de uma cidade** na API pública da
-[OpenWeather](https://openweathermap.org/api/one-call-4) (*One Call API 4.0*), **persiste-os em
+[OpenWeather](https://openweathermap.org/api) (APIs do **plano gratuito**), **persiste-os em
 PostgreSQL** e os **disponibiliza por uma API RESTful** com filtros adequados aos dados.
 
 | Serviço    | Papel                                                                        | Tecnologia principal             | Imagem                              |
@@ -43,8 +43,10 @@ Os contêineres seguem o padrão `gntech-pyweather-<serviço>`.
 ## Pré-requisitos
 
 - **Docker** com **Docker Compose v2** (≥ 2.24, por causa de `env_file` opcional) e **make**.
-- Uma **chave da OpenWeather** com acesso à *One Call API 4.0*. Uma resposta HTTP 401 do ETL indica
-  chave inválida **ou sem acesso a esse produto**.
+- Uma **chave da OpenWeather** (o plano gratuito basta). O ETL usa apenas APIs gratuitas — *Current
+  Weather Data*, *5 Day / 3 Hour Forecast* e *Geocoding* —, **não** a *One Call API*, que exige
+  assinatura. Uma resposta HTTP 401 indica chave inválida, **recém-criada** (a ativação pode levar
+  algumas horas) ou sem acesso ao produto.
 - Para desenvolvimento sem Docker: **uv** e um PostgreSQL acessível.
 
 ## Início rápido
@@ -72,9 +74,15 @@ A cidade padrão é **Florianópolis/SC**. O ETL migra o banco ao iniciar e extr
 `ETL_INTERVAL_SECONDS` (3600 s por padrão). Para encerrar: `make down` (mantém os dados) ou
 `make clean-docker` (**apaga** o volume).
 
-> **Custo de chamadas.** Cada extração consome 1 chamada de condições atuais + `ETL_HOURLY_PAGES`
-> (3) + `ETL_DAILY_PAGES` (1) + 1 por alerta ativo (e 1 de geocodificação, só na primeira vez, se
-> não houver coordenadas). Com os padrões: ~5 chamadas/hora. Ajuste conforme o seu plano.
+> **Custo de chamadas.** Cada extração consome 2 chamadas (condições atuais + previsão de 5 dias),
+> mais 1 de geocodificação na primeira vez (se não houver coordenadas). Com o intervalo padrão:
+> ~48 chamadas/dia, muito abaixo do limite do plano gratuito (60 chamadas/minuto). Com
+> `ETL_INCLUDE_FORECAST=false` caem para 1 por extração.
+
+> **Limitações do plano gratuito.** A previsão tem **passos de 3 horas** (não de 1 hora) por 5 dias;
+> o **resumo diário** é calculado pelo ETL a partir deles; **alertas meteorológicos não são
+> fornecidos** (o endpoint existe, mas retorna lista vazia); não há índice UV, ponto de orvalho nem
+> dados lunares. Detalhes em [Domínio](03-dominio.md#mapeamento-do-plano-gratuito).
 
 ### Desenvolvimento local (sem Docker)
 

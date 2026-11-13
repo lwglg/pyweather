@@ -3,7 +3,7 @@ sequenceDiagram
     participant C as OpenWeatherClient
     participant OW as OpenWeather
 
-    C->>OW: GET /data/4.0/onecall/current
+    C->>OW: GET /data/2.5/weather
     OW-->>C: 503 (ou 429 / falha de rede)
     Note over C: espera Retry-After (máx. 60 s)<br/>ou recuo exponencial 1 s, 2 s, 4 s…
     C->>OW: nova tentativa

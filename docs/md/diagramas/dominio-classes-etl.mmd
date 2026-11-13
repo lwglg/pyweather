@@ -50,7 +50,11 @@ classDiagram
         <<aggregate result>>
         +CurrentWeather weather
         +TimezoneInfo timezone
-        +tuple alert_ids
+    }
+    class Forecast {
+        <<aggregate result>>
+        +tuple steps
+        +tuple daily
     }
 
     class GeocodingProvider {
@@ -60,9 +64,7 @@ classDiagram
     class WeatherProvider {
         <<port>>
         +fetch_current(coords) CurrentSnapshot
-        +fetch_hourly(coords, pages) list
-        +fetch_daily(coords, pages) list
-        +fetch_alerts(ids) list
+        +fetch_forecast(coords) Forecast
     }
     class WeatherRepository {
         <<port>>
@@ -87,6 +89,8 @@ classDiagram
     LocationSpec --> Coordinates
     Location --> Coordinates
     CurrentSnapshot --> CurrentWeather
+    Forecast --> HourlyForecast
+    Forecast --> DailyForecast
     SyncWeatherUseCase --> GeocodingProvider
     SyncWeatherUseCase --> WeatherProvider
     SyncWeatherUseCase --> WeatherRepository

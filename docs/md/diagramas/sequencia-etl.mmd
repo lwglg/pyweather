@@ -3,7 +3,7 @@ sequenceDiagram
     participant R as PeriodicRunner
     participant U as SyncWeatherUseCase
     participant G as OpenWeatherClient (geocoding)
-    participant P as OpenWeatherClient (one call)
+    participant P as OpenWeatherClient (weather/forecast)
     participant Repo as SqlAlchemyWeatherRepository
     participant DB as PostgreSQL
 
@@ -18,24 +18,14 @@ sequenceDiagram
         Repo-->>U: Location com id
     end
     U->>P: fetch_current(coordinates)
-    P-->>U: CurrentSnapshot (observação, fuso, alert_ids)
+    P-->>U: CurrentSnapshot (observação e fuso)
     U->>Repo: update_timezone() + save_current()
     Repo->>DB: UPSERT (merge) current_weather
-    loop páginas horárias (1h)
-        U->>P: fetch_hourly(coordinates, pages)
-        P-->>U: HourlyForecast[] (segue "next")
-    end
-    U->>Repo: save_hourly()
-    Repo->>DB: UPSERT hourly_forecasts
-    U->>P: fetch_daily(coordinates, pages)
-    P-->>U: DailyForecast[]
-    U->>Repo: save_daily()
-    Repo->>DB: UPSERT daily_forecasts
-    opt há alert_ids e include_alerts
-        U->>P: fetch_alerts(alert_ids)
-        P-->>U: WeatherAlert[]
-        U->>Repo: save_alerts()
-        Repo->>DB: UPSERT weather_alerts
+    opt ETL_INCLUDE_FORECAST
+        U->>P: fetch_forecast(coordinates)
+        P-->>U: Forecast (passos de 3 h + resumo diário derivado)
+        U->>Repo: save_hourly() + save_daily()
+        Repo->>DB: UPSERT hourly_forecasts e daily_forecasts
     end
     U-->>R: SyncReport
     Note over R: aguarda ETL_INTERVAL_SECONDS<br/>(interrompível por SIGTERM/SIGINT)

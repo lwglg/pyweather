@@ -9,7 +9,7 @@
 | **Agendador** | O laço periódico do contêiner `etl` (`PeriodicRunner`), ou um operador executando `make etl-run`. |
 | **Consumidor da API** | Qualquer cliente HTTP (aplicação, BI, `curl`). |
 | **Operador / orquestrador** | Pessoa ou plataforma (Docker, Kubernetes) que migra o banco e verifica a saúde dos serviços. |
-| **OpenWeather** | Sistema externo (Geocoding API e One Call API 4.0). |
+| **OpenWeather** | Sistema externo (APIs gratuitas: Geocoding, Current Weather e 5 Day / 3 Hour Forecast). |
 
 ## Diagrama
 
@@ -59,7 +59,7 @@ flowchart LR
 
 | ID | Caso de uso | Ator | Fluxo principal | Alternativos / erros |
 |----|-------------|------|-----------------|----------------------|
-| **UC-01** | Sincronizar dados climáticos da cidade | Agendador | 1. Resolve e grava o local (UC-02). 2. Consulta condições atuais e grava (com o fuso). 3. Consulta `N` páginas de previsão horária e `M` diárias e grava. 4. Se houver alertas ativos, consulta e grava os detalhes. 5. Devolve `SyncReport` (contagens). | Provedor indisponível/limitado → retentativas e, esgotadas, o erro é registrado e o laço tenta no próximo ciclo. 401 → `AuthenticationError`, sem retentativa. Payload inválido → `PayloadError`, nada é gravado daquela etapa. `OPENWEATHER_API_KEY` ausente → `ConfigurationError`. **Idempotente.** |
+| **UC-01** | Sincronizar dados climáticos da cidade | Agendador | 1. Resolve e grava o local (UC-02). 2. Consulta condições atuais e grava (com o fuso). 3. Se `ETL_INCLUDE_FORECAST`, consulta a previsão de 5 dias, grava os passos de 3 h e o resumo diário derivado. 4. Devolve `SyncReport` (contagens). | Provedor indisponível/limitado → retentativas e, esgotadas, o erro é registrado e o laço tenta no próximo ciclo. 401 → `AuthenticationError`, sem retentativa. Payload inválido → `PayloadError`, nada é gravado daquela etapa. `OPENWEATHER_API_KEY` ausente → `ConfigurationError`. **Idempotente.** |
 | **UC-02** | Resolver cidade (geocodificação) | (incluído em UC-01) | Se `CITY_LATITUDE/LONGITUDE` foram informadas, usa-as; senão consulta `/geo/1.0/direct` e faz *upsert* do local. Executado **uma única vez** por processo. | Cidade desconhecida → `LocationNotFoundError`. |
 | **UC-03** | Aplicar migrações do banco | Operador | `make migrate` (ou implícito em `run`/`serve`) leva o banco à revisão mais recente do Alembic. | Reexecutar é inofensivo (idempotente). |
 | **UC-04** | Verificar saúde do ETL | Operador | `python -m pyweather_etl healthcheck` retorna 0 se o banco está acessível **e** na última revisão (usado no `HEALTHCHECK` da imagem). | Banco inacessível ou desatualizado → código 1. |

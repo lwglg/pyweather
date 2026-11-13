@@ -13,10 +13,10 @@ automatizada (Newman, dentro da rede do Docker Compose) — só muda o *environm
 
 | Caminho | Função |
 |---------|--------|
-| `tests/postman/pyweather.postman_collection.json` | Collection v2.1: 31 requisições em 7 pastas (saúde, locais, condições atuais, previsão horária, previsão diária, alertas, contrato OpenAPI) |
+| `tests/postman/pyweather.postman_collection.json` | Collection v2.1: 30 requisições em 7 pastas (saúde, locais, condições atuais, previsão horária, previsão diária, alertas, contrato OpenAPI) |
 | `tests/postman/pyweather.local.postman_environment.json` | `baseUrl = http://localhost:8000`; `strict = false` (valida estrutura e contrato, com qualquer dado) |
 | `tests/postman/pyweather.docker.postman_environment.json` | `baseUrl = http://api:8000` (nome do serviço na rede do Compose); `strict = true` (valida os valores exatos do mock) |
-| `infra/docker/mock-openweather/` | Mock determinístico da OpenWeather (biblioteca padrão do Python) |
+| `infra/docker/mock-openweather/` | Mock determinístico da OpenWeather gratuita (biblioteca padrão do Python) |
 | `infra/docker/newman/` | Imagem `gntech/pyweather-newman:latest` (Node + Newman 6.2.1) e `run.sh` (espera os dados e executa) |
 | `infra/docker/docker-compose.smoke.yml` | *Override* do Compose que monta a stack de smoke |
 | `scripts/sh/smoke.sh` | Orquestra `up` → `run` → `down` |
@@ -50,9 +50,10 @@ flowchart LR
 
 1. **OpenWeather substituída por um mock.** O ETL do smoke aponta `OPENWEATHER_BASE_URL` para
    `http://mock-openweather:8080`, com a chave fictícia `smoke-test-key`. Não exige chave real, rede
-   externa nem consome cota, e os dados são **previsíveis** (Florianópolis, 24,5 °C, 60 previsões
-   horárias em 3 páginas — 30 com `pop ≥ 0,5` —, 8 dias e 1 alerta), o que permite asserções exatas.
-   Os horários das fixtures são relativos ao instante da execução.
+   externa nem consome cota, e os dados são **previsíveis** (Florianópolis, 24,5 °C, 40 passos de 3 h
+   — 20 com `pop ≥ 0,5` —, resumo de 5 ou 6 dias civis e nenhum alerta), o que permite asserções
+   exatas. Os horários das fixtures são relativos ao instante da execução (por isso o número de
+   dias é 5 ou 6, conforme o horário em que o teste roda).
 2. **Isolamento.** O projeto Compose é `gntech-pyweather-smoke`: contêineres, rede e volume próprios
    (`gntech-pyweather-smoke-*`), **nenhuma porta publicada no host** e banco sempre novo, destruído ao
    final. Não conflita com a stack de desenvolvimento (`make up`) nem apaga seus dados.
@@ -61,9 +62,9 @@ flowchart LR
 4. **Modo estrito.** A variável `strict` do environment liga as asserções de valor (ex.:
    `expectedTemperature`, `expectedHourlyTotal`). Contra dados reais (`strict = false`) a collection
    valida apenas estrutura, tipos, filtros, paginação, erros e o contrato OpenAPI.
-5. **Prontidão.** O `run.sh` aguarda até 180 s (`WAIT_TIMEOUT`) que `/v1/locations/1/alerts` retorne
-   `total ≥ 1` — o ETL grava por último os alertas, então todos os dados já estão disponíveis — e só
-   então executa o Newman. Isso elimina a corrida entre a subida da API e a primeira extração.
+5. **Prontidão.** O `run.sh` aguarda até 180 s (`WAIT_TIMEOUT`) que `/v1/locations/1/forecast/daily`
+   retorne `total ≥ 1` — o ETL grava por último o resumo diário, então todos os dados já estão
+   disponíveis — e só então executa o Newman. Isso elimina a corrida entre a subida da API e a primeira extração.
 
 <!-- mmd:smoke-fluxo -->
 ```mermaid
@@ -81,13 +82,13 @@ sequenceDiagram
     SH->>DC: up -d --build --wait (api, mock-openweather)
     DC->>MK: inicia e aguarda /health
     DC->>ETL: inicia (migra o esquema e extrai)
-    ETL->>MK: geocodificação, atual, 1h × 3, 1d, alerta
+    ETL->>MK: geocodificação, atual, previsão 5 dias
     ETL-->>ETL: upsert no PostgreSQL
     DC->>API: inicia e fica saudável quando /health responde
     SH->>DC: run --rm newman
     DC->>NW: inicia
-    NW->>API: aguarda dados (alertas com total ≥ 1)
-    NW->>API: executa as 31 requisições e asserções
+    NW->>API: aguarda dados (previsão diária com total ≥ 1)
+    NW->>API: executa as 30 requisições e asserções
     NW-->>SH: código de saída (0 = sucesso) + JUnit
     SH->>DC: down --volumes (sempre, via trap)
     SH-->>Dev: mesmo código de saída
@@ -131,8 +132,10 @@ com `strict = false`. Os valores exatos do mock **não** se aplicam.
 - O ambiente em que este recurso foi desenvolvido **não tem *daemon* Docker**: as imagens
   `mock-openweather` e `newman` e a stack `make smoke` **não foram construídas nem executadas** ali.
   O que foi verificado: `docker compose config` (sintaxe do override) e a execução **real** de
-  mock → ETL → **PostgreSQL real** → API → Newman, fora de contêineres (85 asserções no modo
-  estrito e 75 no `local`, 0 falhas; falhas forçadas retornam código 1). Rode `make smoke` na
+  mock → ETL → banco → API → Newman, fora de contêineres (81 asserções no modo estrito e 73 no
+  `local`, 0 falhas; falhas forçadas retornam código 1). Após a migração para o plano gratuito essa
+  verificação usou SQLite; o esquema não mudou e a versão anterior havia sido verificada em
+  PostgreSQL real. Rode `make smoke` na
   primeira utilização.
-- O mock reproduz o contrato documentado da OpenWeather, não o seu comportamento real; ele não
+- O mock reproduz o contrato documentado da OpenWeather gratuita, não o seu comportamento real; ele não
   substitui um teste com a API de verdade.

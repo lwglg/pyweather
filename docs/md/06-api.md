@@ -28,9 +28,9 @@ Nomes de campos e estruturas de dados estão em inglês; descrições, resumos e
 | `GET /v1/locations/{location_id}` | Detalha um local | — |
 | `GET /v1/locations/{location_id}/current` | Condição atual **mais recente** | — |
 | `GET /v1/locations/{location_id}/current/history` | Histórico de observações | `start`, `end`, `min_temperature`, `max_temperature`, `min_humidity`, `max_humidity`, `condition`, `order` (padrão `desc`) |
-| `GET /v1/locations/{location_id}/forecast/hourly` | Previsão horária | `start`, `end`, `min_temperature`, `max_temperature`, `min_pop`, `condition`, `order` (padrão `asc`) |
-| `GET /v1/locations/{location_id}/forecast/daily` | Previsão diária | `start`, `end`, `min_temperature` (sobre a **mínima** do dia), `max_temperature` (sobre a **máxima** do dia), `min_pop`, `condition`, `order` (padrão `asc`) |
-| `GET /v1/locations/{location_id}/alerts` | Alertas meteorológicos | `event`, `sender`, `active_at`, `order` (padrão `desc`) |
+| `GET /v1/locations/{location_id}/forecast/hourly` | Previsão em passos de **3 h** (5 dias) | `start`, `end`, `min_temperature`, `max_temperature`, `min_pop`, `condition`, `order` (padrão `asc`) |
+| `GET /v1/locations/{location_id}/forecast/daily` | Resumo diário (derivado dos passos de 3 h) | `start`, `end`, `min_temperature` (sobre a **mínima** do dia), `max_temperature` (sobre a **máxima** do dia), `min_pop`, `condition`, `order` (padrão `asc`) |
+| `GET /v1/locations/{location_id}/alerts` | Alertas meteorológicos (**vazio** no plano gratuito) | `event`, `sender`, `active_at`, `order` (padrão `desc`) |
 
 Faixas validadas: `min_humidity`/`max_humidity` ∈ [0, 100]; `min_pop` ∈ [0, 1]; `location_id` ≥ 1.
 
@@ -43,13 +43,13 @@ curl "http://localhost:8000/v1/locations?country=BR&limit=1"
 # Condição atual
 curl "http://localhost:8000/v1/locations/1/current"
 
-# Próximas horas com chance de chuva ≥ 50 %
+# Passos de 3 h com chance de chuva ≥ 50 %
 curl "http://localhost:8000/v1/locations/1/forecast/hourly?min_pop=0.5&limit=24"
 
-# Dias frios (máxima ≤ 20 °C) na semana
+# Dias frios (máxima ≤ 20 °C) nos próximos 5 dias
 curl "http://localhost:8000/v1/locations/1/forecast/daily?max_temperature=20&start=2026-11-12T00:00:00Z"
 
-# Alertas vigentes agora
+# Alertas vigentes agora (lista vazia no plano gratuito)
 curl "http://localhost:8000/v1/locations/1/alerts?active_at=2026-11-12T15:00:00Z"
 ```
 

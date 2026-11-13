@@ -12,13 +12,13 @@ sequenceDiagram
     SH->>DC: up -d --build --wait (api, mock-openweather)
     DC->>MK: inicia e aguarda /health
     DC->>ETL: inicia (migra o esquema e extrai)
-    ETL->>MK: geocodificação, atual, 1h × 3, 1d, alerta
+    ETL->>MK: geocodificação, atual, previsão 5 dias
     ETL-->>ETL: upsert no PostgreSQL
     DC->>API: inicia e fica saudável quando /health responde
     SH->>DC: run --rm newman
     DC->>NW: inicia
-    NW->>API: aguarda dados (alertas com total ≥ 1)
-    NW->>API: executa as 31 requisições e asserções
+    NW->>API: aguarda dados (previsão diária com total ≥ 1)
+    NW->>API: executa as 30 requisições e asserções
     NW-->>SH: código de saída (0 = sucesso) + JUnit
     SH->>DC: down --volumes (sempre, via trap)
     SH-->>Dev: mesmo código de saída

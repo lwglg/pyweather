@@ -1,9 +1,7 @@
 # pyweather
 
-[![ETL — QA](https://github.com/lwglg/pyweather/actions/workflows/etl-qa.yml/badge.svg)](https://github.com/lwglg/pyweather/actions/workflows/etl-qa.yml) [![API — QA](https://github.com/lwglg/pyweather/actions/workflows/api-qa.yml/badge.svg)](https://github.com/lwglg/pyweather/actions/workflows/api-qa.yml)
-
 Plataforma para **obter, armazenar e servir dados climáticos de uma cidade** a partir da API pública
-da [OpenWeather](https://openweathermap.org/api/one-call-4) (One Call API 4.0).
+da [OpenWeather](https://openweathermap.org/api) — **somente APIs do plano gratuito** (Current Weather e 5 Day / 3 Hour Forecast).
 
 - **ETL** (`services/etl`): extrai da OpenWeather, transforma em entidades de domínio e carrega em **PostgreSQL**.
 - **API RESTful** (`services/api`): **FastAPI** com filtros sobre os dados extraídos; Swagger/OpenAPI **em português**.
@@ -12,7 +10,7 @@ da [OpenWeather](https://openweathermap.org/api/one-call-4) (One Call API 4.0).
 <!-- mmd:arquitetura-contexto -->
 ```mermaid
 flowchart LR
-    OW[("OpenWeather<br/>One Call API 4.0<br/>+ Geocoding API")]
+    OW[("OpenWeather<br/>Current Weather + 5 Day/3 Hour Forecast<br/>+ Geocoding (plano gratuito)")]
     subgraph PYW["pyweather"]
         ETL["<b>etl</b><br/>extrai · transforma · carrega"]
         DB[("<b>database</b><br/>PostgreSQL")]

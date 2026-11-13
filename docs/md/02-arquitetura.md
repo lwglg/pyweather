@@ -10,7 +10,7 @@ Dois serviços independentes compartilham **apenas o banco de dados** (nenhum c�
 <!-- mmd:arquitetura-contexto -->
 ```mermaid
 flowchart LR
-    OW[("OpenWeather<br/>One Call API 4.0<br/>+ Geocoding API")]
+    OW[("OpenWeather<br/>Current Weather + 5 Day/3 Hour Forecast<br/>+ Geocoding (plano gratuito)")]
     subgraph PYW["pyweather"]
         ETL["<b>etl</b><br/>extrai · transforma · carrega"]
         DB[("<b>database</b><br/>PostgreSQL")]
