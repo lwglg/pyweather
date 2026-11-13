@@ -2,7 +2,7 @@ name: Smoke tests
 
 on:
   push:
-    branches: [main]
+    branches: [master,develop]
     paths:
       - "services/**"
       - "infra/docker/**"
