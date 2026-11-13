@@ -1,0 +1,67 @@
+# pyweather — serviços: PostgreSQL, ETL (OpenWeather → banco) e API RESTful.
+# Uso (a partir da raiz do repositório): `make up`
+# Padrões: contêiner `gntech-pyweather-<serviço>` · imagem `gntech/pyweather-<serviço>:latest`
+name: gntech-pyweather
+
+services:
+  database:
+    container_name: gntech-pyweather-database
+    image: gntech/pyweather-database:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/database/Dockerfile
+    env_file:
+      - database/.env
+    volumes:
+      - pyweather-pgdata:/var/lib/postgresql
+    ports:
+      - "${DATABASE_PORT:-5432}:5432"
+    restart: unless-stopped
+    networks: [pyweather]
+
+  etl:
+    container_name: gntech-pyweather-etl
+    image: gntech/pyweather-etl:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/etl/Dockerfile
+    env_file:
+      - etl/.env
+      - path: etl/.env.local # opcional: segredos locais (OPENWEATHER_API_KEY)
+        required: false
+    environment:
+      # Repasse sem valor: só é definida no contêiner se existir no shell, e então tem
+      # precedência sobre o .env.local (sem sobrescrever com vazio quando ausente).
+      - OPENWEATHER_API_KEY
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [pyweather]
+
+  api:
+    container_name: gntech-pyweather-api
+    image: gntech/pyweather-api:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/api/Dockerfile
+    env_file:
+      - api/.env
+    depends_on:
+      database:
+        condition: service_healthy
+      etl:
+        # O ETL aplica as migrações ao iniciar; só então a API tem o esquema que lê.
+        condition: service_started
+    ports:
+      - "${API_PORT:-8000}:8000"
+    restart: unless-stopped
+    networks: [pyweather]
+
+volumes:
+  pyweather-pgdata:
+    name: gntech-pyweather-pgdata
+
+networks:
+  pyweather:
+    name: gntech-pyweather-network

@@ -1,0 +1,78 @@
+# Smoke tests: sobe TODA a stack em contêineres e executa a collection do Postman (via Newman)
+# dentro da rede do Compose, falando com a API pelo nome do serviço (http://api:8000).
+#
+# É um *override* do docker-compose.yml, usado SEMPRE em conjunto com ele:
+#   docker compose -f docker-compose.yml -f docker-compose.smoke.yml -p gntech-pyweather-smoke ...
+# (o `make smoke` faz isso). Pontos-chave:
+#   * OpenWeather é substituída por um MOCK determinístico (sem chave, sem internet, sem custo);
+#   * contêineres, volume e rede próprios (`gntech-pyweather-smoke-*`): não colidem com a stack de dev;
+#   * nenhuma porta é publicada no host; o banco nasce vazio e é destruído ao final (`down -v`);
+#   * healthchecks acelerados para o teste terminar rápido.
+name: gntech-pyweather-smoke
+
+services:
+  database:
+    container_name: gntech-pyweather-smoke-database
+    ports: !reset []
+    healthcheck:
+      interval: 2s
+      start_period: 5s
+
+  etl:
+    container_name: gntech-pyweather-smoke-etl
+    environment:
+      # Estes valores têm precedência sobre o env_file (inclusive sobre um .env.local com chave real):
+      # o smoke nunca fala com a OpenWeather de verdade.
+      OPENWEATHER_API_KEY: smoke-test-key
+      OPENWEATHER_BASE_URL: http://mock-openweather:8080
+      POSTGRES_HOST: database
+    depends_on:
+      mock-openweather:
+        condition: service_healthy
+    healthcheck:
+      interval: 3s
+      start_period: 5s
+
+  api:
+    container_name: gntech-pyweather-smoke-api
+    ports: !reset []
+    healthcheck:
+      interval: 3s
+      start_period: 5s
+
+  mock-openweather:
+    container_name: gntech-pyweather-smoke-mock-openweather
+    image: gntech/pyweather-mock-openweather:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/mock-openweather/Dockerfile
+    env_file:
+      - mock-openweather/.env
+    networks: [pyweather]
+
+  newman:
+    container_name: gntech-pyweather-smoke-newman
+    image: gntech/pyweather-newman:latest
+    build:
+      context: ../..
+      dockerfile: infra/docker/newman/Dockerfile
+    env_file:
+      - newman/.env
+    volumes:
+      # Os MESMOS arquivos usados no Postman (collection + environments).
+      - ../../tests/postman:/postman:ro
+      - ../../build/smoke:/results
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [pyweather]
+    # Só roda sob demanda (`docker compose run newman`), nunca no `up` normal.
+    profiles: [smoke]
+
+volumes:
+  pyweather-pgdata:
+    name: gntech-pyweather-smoke-pgdata
+
+networks:
+  pyweather:
+    name: gntech-pyweather-smoke-network
