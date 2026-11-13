@@ -115,6 +115,10 @@ Requer Docker Compose ≥ 2.24 (o mesmo do restante do projeto). Passos individu
 imprime os logs dos serviços. O relatório JUnit fica em `build/smoke/newman-junit.xml` (no CI, é
 publicado como artefato).
 
+> O Newman roda como o usuário `node` (UID 1000) no contêiner, e `build/smoke` é montado do host. O
+> `smoke.sh` libera a escrita nesse diretório (`chmod a+rwx`) para evitar `EACCES` quando o dono no
+> host tem outro UID (como no runner do GitHub Actions, UID 1001).
+
 ### No Postman (desktop)
 
 1. *Import* → `tests/postman/pyweather.postman_collection.json` e o environment desejado.

@@ -21,14 +21,22 @@ COMPOSE=(docker compose
 RESULTS_DIR="build/smoke"
 NEWMAN_VERSION="${NEWMAN_VERSION:-6.2.1}"
 
-smoke_up() {
+# O Newman roda como o usuário `node` (UID 1000) dentro do contêiner, que costuma ser diferente do
+# dono do diretório no host (ex.: o runner do GitHub Actions usa o UID 1001). Sem permissão de
+# escrita, o relatório JUnit falha com `EACCES: permission denied, open '/results/newman-junit.xml'`.
+prepare_results_dir() {
     mkdir -p "${RESULTS_DIR}"
+    chmod a+rwx "${RESULTS_DIR}"
+}
+
+smoke_up() {
+    prepare_results_dir
     echo ">> subindo a stack de smoke (${PROJECT})"
     "${COMPOSE[@]}" up -d --build --wait --wait-timeout 300 api mock-openweather
 }
 
 smoke_run() {
-    mkdir -p "${RESULTS_DIR}"
+    prepare_results_dir
     echo ">> executando a collection (Newman) na rede do Compose"
     "${COMPOSE[@]}" --profile smoke run --rm --build newman
 }
