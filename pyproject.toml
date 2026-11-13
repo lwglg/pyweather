@@ -1,7 +1,7 @@
 [project]
 name = "pyweather"
 version = "0.1.0"
-description = "Plataforma de dados climáticos: ETL OpenWeather (One Call 4.0) → PostgreSQL e API RESTful (FastAPI)."
+description = "Plataforma de dados climáticos: ETL OpenWeather (plano gratuito) → PostgreSQL e API RESTful (FastAPI)."
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
 license = { text = "MIT" }
