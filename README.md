@@ -1,6 +1,6 @@
 # pyweather
 
-[![API — QA](https://github.com/lwglg/pyweather/actions/workflows/api-qa.yml/badge.svg)](https://github.com/lwglg/pyweather/actions/workflows/api-qa.yml) [![ETL — QA](https://github.com/lwglg/pyweather/actions/workflows/etl-qa.yml/badge.svg)](https://github.com/lwglg/pyweather/actions/workflows/etl-qa.yml)
+[![API — QA](https://github.com/lwglg/pyweather/actions/workflows/api-qa.yml/badge.svg)](https://github.com/lwglg/pyweather/actions/workflows/api-qa.yml) [![ETL — QA](https://github.com/lwglg/pyweather/actions/workflows/etl-qa.yml/badge.svg)](https://github.com/lwglg/pyweather/actions/workflows/etl-qa.yml) [![Smoke tests](https://github.com/lwglg/pyweather/actions/workflows/smoke.yml/badge.svg)](https://github.com/lwglg/pyweather/actions/workflows/smoke.yml)
 
 Plataforma para **obter, armazenar e servir dados climáticos de uma cidade** a partir da API pública
 da [OpenWeather](https://openweathermap.org/api) — **somente APIs do plano gratuito** (Current Weather e 5 Day / 3 Hour Forecast).
