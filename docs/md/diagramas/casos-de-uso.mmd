@@ -1,0 +1,35 @@
+flowchart LR
+    SCH(["⏱ Agendador<br/>(loop do contêiner / operador)"])
+    CLI(["👤 Consumidor da API"])
+    OPS(["🛠 Operador / orquestrador"])
+    OW(["☁ OpenWeather"])
+
+    subgraph ETLUC["Serviço ETL"]
+        UC1["UC-01 Sincronizar dados<br/>climáticos da cidade"]
+        UC2["UC-02 Resolver cidade<br/>(geocodificação)"]
+        UC3["UC-03 Aplicar migrações<br/>do banco"]
+        UC4["UC-04 Verificar saúde do ETL"]
+    end
+
+    subgraph APIUC["Serviço API"]
+        UC5["UC-05 Listar / detalhar locais"]
+        UC6["UC-06 Consultar condição<br/>atual mais recente"]
+        UC7["UC-07 Consultar histórico<br/>de condições"]
+        UC8["UC-08 Consultar previsão<br/>horária / diária"]
+        UC9["UC-09 Consultar alertas"]
+        UC10["UC-10 Verificar liveness / readiness"]
+    end
+
+    SCH --> UC1
+    OPS --> UC3
+    OPS --> UC4
+    OPS --> UC10
+    CLI --> UC5
+    CLI --> UC6
+    CLI --> UC7
+    CLI --> UC8
+    CLI --> UC9
+    UC1 -. include .-> UC2
+    UC1 -. include .-> UC3
+    UC1 --> OW
+    UC2 --> OW

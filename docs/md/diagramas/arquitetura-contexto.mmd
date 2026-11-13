@@ -1,0 +1,13 @@
+flowchart LR
+    OW[("OpenWeather<br/>One Call API 4.0<br/>+ Geocoding API")]
+    subgraph PYW["pyweather"]
+        ETL["<b>etl</b><br/>extrai · transforma · carrega"]
+        DB[("<b>database</b><br/>PostgreSQL")]
+        API["<b>api</b><br/>FastAPI (REST)"]
+    end
+    CLI["Clientes HTTP<br/>(apps, BI, curl)"]
+
+    OW -- "HTTPS / JSON" --> ETL
+    ETL -- "upsert (SQLAlchemy + Alembic)" --> DB
+    DB -- "consulta somente leitura (SQLModel)" --> API
+    CLI -- "GET /v1/..." --> API

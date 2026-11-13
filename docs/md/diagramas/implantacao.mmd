@@ -1,0 +1,11 @@
+flowchart LR
+    subgraph NET["rede gntech-pyweather-network"]
+        DBC["gntech-pyweather-database<br/>gntech/pyweather-database:latest<br/>:5432"]
+        ETLC["gntech-pyweather-etl<br/>gntech/pyweather-etl:latest"]
+        APIC["gntech-pyweather-api<br/>gntech/pyweather-api:latest<br/>:8000"]
+    end
+    VOL[("volume<br/>gntech-pyweather-pgdata")]
+    DBC --- VOL
+    ETLC -- "depends_on: service_healthy" --> DBC
+    APIC -- "depends_on: service_healthy" --> DBC
+    APIC -- "depends_on: service_started" --> ETLC

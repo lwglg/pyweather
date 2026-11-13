@@ -1,0 +1,30 @@
+sequenceDiagram
+    autonumber
+    actor K as Cliente
+    participant RT as Router (FastAPI)
+    participant S as WeatherQueryService
+    participant Repo as SqlModelWeatherReadRepository
+    participant DB as PostgreSQL
+
+    K->>RT: GET /v1/locations/1/forecast/hourly?min_pop=0.5&limit=20
+    RT->>RT: valida parâmetros (Pydantic) → HourlyFilter + Pagination
+    RT->>S: list_hourly(1, filtro, página)
+    S->>Repo: get_location(1)
+    Repo->>DB: SELECT locations WHERE id = 1
+    alt local inexistente
+        Repo-->>S: None
+        S-->>RT: LocationNotFoundError
+        RT-->>K: 404 {"detail": "Local 1 não encontrado."}
+    else existe
+        S->>S: valida período e limites
+        alt filtro inconsistente
+            S-->>RT: InvalidFilterError
+            RT-->>K: 422 {"detail": "..."}
+        else válido
+            S->>Repo: list_hourly(1, filtro, página)
+            Repo->>DB: SELECT COUNT(*) + SELECT ... LIMIT/OFFSET
+            Repo-->>S: Page[HourlyForecast]
+            S-->>RT: Page
+            RT-->>K: 200 PageOut{items, total, limit, offset}
+        end
+    end

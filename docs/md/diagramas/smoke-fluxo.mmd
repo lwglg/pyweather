@@ -1,0 +1,24 @@
+sequenceDiagram
+    autonumber
+    actor Dev as make smoke
+    participant SH as scripts/sh/smoke.sh
+    participant DC as Docker Compose
+    participant ETL as etl
+    participant MK as mock-openweather
+    participant API as api
+    participant NW as newman
+
+    Dev->>SH: smoke.sh all
+    SH->>DC: up -d --build --wait (api, mock-openweather)
+    DC->>MK: inicia e aguarda /health
+    DC->>ETL: inicia (migra o esquema e extrai)
+    ETL->>MK: geocodificação, atual, 1h × 3, 1d, alerta
+    ETL-->>ETL: upsert no PostgreSQL
+    DC->>API: inicia e fica saudável quando /health responde
+    SH->>DC: run --rm newman
+    DC->>NW: inicia
+    NW->>API: aguarda dados (alertas com total ≥ 1)
+    NW->>API: executa as 31 requisições e asserções
+    NW-->>SH: código de saída (0 = sucesso) + JUnit
+    SH->>DC: down --volumes (sempre, via trap)
+    SH-->>Dev: mesmo código de saída

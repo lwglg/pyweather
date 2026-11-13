@@ -1,0 +1,76 @@
+erDiagram
+    LOCATIONS ||--o{ CURRENT_WEATHER : "observações"
+    LOCATIONS ||--o{ HOURLY_FORECASTS : "previsões horárias"
+    LOCATIONS ||--o{ DAILY_FORECASTS : "previsões diárias"
+    LOCATIONS ||--o{ WEATHER_ALERTS : "alertas"
+
+    LOCATIONS {
+        int id PK
+        string name
+        string state
+        string country
+        numeric latitude "UNIQUE com longitude"
+        numeric longitude
+        string timezone "IANA"
+        int timezone_offset "segundos"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    CURRENT_WEATHER {
+        int location_id PK,FK
+        timestamptz observed_at PK
+        float temperature
+        float feels_like
+        int pressure
+        int humidity
+        float dew_point
+        float uvi
+        int clouds
+        int visibility
+        float wind_speed
+        int wind_deg
+        float wind_gust
+        float rain_1h
+        float snow_1h
+        string condition_main
+        string condition_description
+        timestamptz sunrise
+        timestamptz sunset
+        timestamptz fetched_at
+    }
+    HOURLY_FORECASTS {
+        int location_id PK,FK
+        timestamptz forecast_at PK
+        float temperature
+        float feels_like
+        int humidity
+        float pop "probabilidade 0..1"
+        float rain_1h
+        string condition_main
+        timestamptz fetched_at
+    }
+    DAILY_FORECASTS {
+        int location_id PK,FK
+        timestamptz forecast_at PK
+        float temp_min
+        float temp_max
+        float temp_day
+        float temp_night
+        float pop
+        float rain
+        float moon_phase
+        timestamptz sunrise
+        timestamptz sunset
+        timestamptz fetched_at
+    }
+    WEATHER_ALERTS {
+        int location_id PK,FK
+        string alert_id PK
+        string sender_name
+        string event
+        timestamptz starts_at
+        timestamptz ends_at
+        json descriptions
+        json tags
+        timestamptz fetched_at
+    }

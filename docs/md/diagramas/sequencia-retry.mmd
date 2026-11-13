@@ -1,0 +1,11 @@
+sequenceDiagram
+    autonumber
+    participant C as OpenWeatherClient
+    participant OW as OpenWeather
+
+    C->>OW: GET /data/4.0/onecall/current
+    OW-->>C: 503 (ou 429 / falha de rede)
+    Note over C: espera Retry-After (máx. 60 s)<br/>ou recuo exponencial 1 s, 2 s, 4 s…
+    C->>OW: nova tentativa
+    OW-->>C: 200 + JSON
+    Note over C: 401 → AuthenticationError (sem retry)<br/>404 → ResourceNotFoundError<br/>tentativas esgotadas → RateLimitError / ProviderUnavailableError

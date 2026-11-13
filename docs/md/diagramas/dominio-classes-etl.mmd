@@ -1,0 +1,95 @@
+classDiagram
+    direction LR
+
+    class Coordinates {
+        <<value object>>
+        +float latitude
+        +float longitude
+    }
+    class LocationSpec {
+        <<value object>>
+        +str name
+        +str country
+        +str state
+        +Coordinates coordinates
+    }
+    class Location {
+        <<entity>>
+        +int id
+        +str name
+        +str country
+        +Coordinates coordinates
+        +TimezoneInfo timezone
+    }
+    class CurrentWeather {
+        <<entity>>
+        +datetime observed_at
+        +float temperature
+        +Wind wind
+        +Precipitation precipitation
+        +WeatherCondition condition
+    }
+    class HourlyForecast {
+        <<entity>>
+        +datetime forecast_at
+    }
+    class DailyForecast {
+        <<entity>>
+        +datetime forecast_at
+        +DailyTemperature temperature
+        +DailyFeelsLike feels_like
+    }
+    class WeatherAlert {
+        <<entity>>
+        +str alert_id
+        +str event
+        +datetime starts_at
+        +datetime ends_at
+    }
+    class CurrentSnapshot {
+        <<aggregate result>>
+        +CurrentWeather weather
+        +TimezoneInfo timezone
+        +tuple alert_ids
+    }
+
+    class GeocodingProvider {
+        <<port>>
+        +locate(spec) Location
+    }
+    class WeatherProvider {
+        <<port>>
+        +fetch_current(coords) CurrentSnapshot
+        +fetch_hourly(coords, pages) list
+        +fetch_daily(coords, pages) list
+        +fetch_alerts(ids) list
+    }
+    class WeatherRepository {
+        <<port>>
+        +upsert_location(location) Location
+        +update_timezone(id, tz)
+        +save_current(id, weather) int
+        +save_hourly(id, items) int
+        +save_daily(id, items) int
+        +save_alerts(id, items) int
+    }
+    class SyncWeatherUseCase {
+        <<use case>>
+        +execute() SyncReport
+    }
+    class OpenWeatherClient {
+        <<adapter>>
+    }
+    class SqlAlchemyWeatherRepository {
+        <<adapter>>
+    }
+
+    LocationSpec --> Coordinates
+    Location --> Coordinates
+    CurrentSnapshot --> CurrentWeather
+    SyncWeatherUseCase --> GeocodingProvider
+    SyncWeatherUseCase --> WeatherProvider
+    SyncWeatherUseCase --> WeatherRepository
+    OpenWeatherClient ..|> GeocodingProvider
+    OpenWeatherClient ..|> WeatherProvider
+    SqlAlchemyWeatherRepository ..|> WeatherRepository

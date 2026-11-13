@@ -1,0 +1,22 @@
+flowchart TB
+    subgraph ETLS["services/etl — pyweather_etl"]
+        direction TB
+        E_ENTRY["<b>Entrada</b><br/>cli.py · composition.py · config.py"]
+        E_APP["<b>application</b><br/>SyncWeatherUseCase · PeriodicRunner"]
+        E_DOM["<b>domain</b><br/>entities · value_objects · ports · errors"]
+        E_INF["<b>infrastructure</b><br/>openweather (client, mappers)<br/>persistence (models, repositories, Alembic)"]
+        E_ENTRY --> E_APP --> E_DOM
+        E_INF -. "implementa as portas" .-> E_DOM
+        E_ENTRY --> E_INF
+    end
+
+    subgraph APIS["services/api — pyweather_api"]
+        direction TB
+        A_PRES["<b>presentation</b><br/>routers · schemas · errors (FastAPI)"]
+        A_APP["<b>application</b><br/>WeatherQueryService"]
+        A_DOM["<b>domain</b><br/>models · filtros · ports · errors"]
+        A_INF["<b>infrastructure</b><br/>SqlModelWeatherReadRepository · tables"]
+        A_PRES --> A_APP --> A_DOM
+        A_INF -. "implementa a porta" .-> A_DOM
+        A_PRES -. "injeção em main.py" .-> A_INF
+    end

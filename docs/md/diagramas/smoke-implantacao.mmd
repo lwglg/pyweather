@@ -1,0 +1,19 @@
+flowchart LR
+    DEV["Postman (desktop)<br/>environment <b>local</b><br/>baseUrl = localhost:8000"]
+    subgraph NET["rede gntech-pyweather-smoke-network"]
+        MOCK["gntech-pyweather-smoke-mock-openweather<br/>:8080 (fixtures determinísticas)"]
+        DBC["gntech-pyweather-smoke-database<br/>PostgreSQL"]
+        ETLC["gntech-pyweather-smoke-etl"]
+        APIC["gntech-pyweather-smoke-api<br/>:8000"]
+        NEW["gntech-pyweather-smoke-newman<br/>environment <b>docker</b><br/>baseUrl = http://api:8000"]
+    end
+    FILES[("tests/postman<br/>collection + environments")]
+    OUT[("build/smoke<br/>newman-junit.xml")]
+
+    ETLC -- "OPENWEATHER_BASE_URL" --> MOCK
+    ETLC -- "upsert" --> DBC
+    APIC -- "consulta" --> DBC
+    NEW -- "GET /v1/..." --> APIC
+    FILES -. "volume (somente leitura)" .-> NEW
+    FILES -. "importar" .-> DEV
+    NEW -. "relatório" .-> OUT
