@@ -7,6 +7,7 @@ from pyweather_etl.domain.entities import (
     CurrentSnapshot,
     CurrentWeather,
     DailyForecast,
+    Forecast,
     HourlyForecast,
     Location,
     WeatherAlert,
@@ -23,23 +24,15 @@ class GeocodingProvider(ABC):
 
 
 class WeatherProvider(ABC):
-    """Fonte de dados climáticos (OpenWeather One Call)."""
+    """Fonte de dados climáticos (OpenWeather, plano gratuito)."""
 
     @abstractmethod
     def fetch_current(self, coordinates: Coordinates) -> CurrentSnapshot:
-        """Condições atuais, fuso horário e IDs de alertas ativos."""
+        """Condições atuais e fuso horário do local."""
 
     @abstractmethod
-    def fetch_hourly(self, coordinates: Coordinates, pages: int) -> list[HourlyForecast]:
-        """Linha do tempo horária (``pages`` páginas à frente)."""
-
-    @abstractmethod
-    def fetch_daily(self, coordinates: Coordinates, pages: int) -> list[DailyForecast]:
-        """Linha do tempo diária (``pages`` páginas à frente)."""
-
-    @abstractmethod
-    def fetch_alerts(self, alert_ids: Sequence[str]) -> list[WeatherAlert]:
-        """Detalhes dos alertas informados (IDs inexistentes são ignorados)."""
+    def fetch_forecast(self, coordinates: Coordinates) -> Forecast:
+        """Previsão de 5 dias: passos de 3 h e resumo diário."""
 
 
 class WeatherRepository(ABC):

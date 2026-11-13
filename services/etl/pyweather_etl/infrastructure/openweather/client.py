@@ -1,19 +1,20 @@
-"""Cliente HTTP da OpenWeather: Geocoding API + One Call API 4.0 (extração — E do ETL)."""
+"""Cliente HTTP da OpenWeather, plano gratuito (extração — E do ETL).
+
+APIs usadas (todas disponíveis na chave gratuita): Geocoding, Current Weather Data 2.5 e
+5 Day / 3 Hour Forecast 2.5.
+"""
 
 import logging
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from typing import Any
-from urllib.parse import quote
 
 import httpx
 
 from pyweather_etl.domain.entities import (
     CurrentSnapshot,
-    DailyForecast,
-    HourlyForecast,
+    Forecast,
     Location,
-    WeatherAlert,
 )
 from pyweather_etl.domain.errors import (
     AuthenticationError,
@@ -33,7 +34,8 @@ from pyweather_etl.infrastructure.openweather import mappers
 logger = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "https://api.openweathermap.org"
-ONE_CALL = "/data/4.0/onecall"
+CURRENT_WEATHER = "/data/2.5/weather"
+FORECAST = "/data/2.5/forecast"
 GEOCODING = "/geo/1.0/direct"
 
 _RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
@@ -45,9 +47,7 @@ class OpenWeatherClient(GeocodingProvider, WeatherProvider):
 
     Boas práticas aplicadas:
       * a chave (``appid``) é enviada apenas como parâmetro de consulta e nunca é logada;
-      * tentativas com recuo exponencial para HTTP 429/5xx e falhas de rede;
-      * URLs de paginação (``next``) só são seguidas se apontarem para o host configurado,
-        evitando vazar a chave para terceiros.
+      * tentativas com recuo exponencial para HTTP 429/5xx e falhas de rede.
     """
 
     def __init__(
@@ -95,28 +95,12 @@ class OpenWeatherClient(GeocodingProvider, WeatherProvider):
 
     # --- WeatherProvider -----------------------------------------------------------------------
     def fetch_current(self, coordinates: Coordinates) -> CurrentSnapshot:
-        payload = self._request(f"{ONE_CALL}/current", self._weather_params(coordinates))
+        payload = self._request(CURRENT_WEATHER, self._weather_params(coordinates))
         return mappers.map_current_snapshot(payload)
 
-    def fetch_hourly(self, coordinates: Coordinates, pages: int) -> list[HourlyForecast]:
-        records = self._fetch_timeline("1h", coordinates, pages, mappers.map_hourly)
-        return list({item.forecast_at: item for item in records}.values())
-
-    def fetch_daily(self, coordinates: Coordinates, pages: int) -> list[DailyForecast]:
-        records = self._fetch_timeline("1day", coordinates, pages, mappers.map_daily)
-        return list({item.forecast_at: item for item in records}.values())
-
-    def fetch_alerts(self, alert_ids: Sequence[str]) -> list[WeatherAlert]:
-        alerts: list[WeatherAlert] = []
-        for alert_id in dict.fromkeys(alert_ids):
-            path = f"{ONE_CALL}/alert/{quote(alert_id, safe='.:-_')}"
-            try:
-                payload = self._request(path, {})
-            except ResourceNotFoundError:
-                logger.warning("Alerta %s não encontrado; ignorando.", alert_id)
-                continue
-            alerts.append(mappers.map_alert(payload))
-        return alerts
+    def fetch_forecast(self, coordinates: Coordinates) -> Forecast:
+        payload = self._request(FORECAST, self._weather_params(coordinates))
+        return mappers.map_forecast(payload)
 
     # --- Internos ------------------------------------------------------------------------------
     def _weather_params(self, coordinates: Coordinates) -> dict[str, Any]:
@@ -126,53 +110,6 @@ class OpenWeatherClient(GeocodingProvider, WeatherProvider):
             "units": self._units,
             "lang": self._lang,
         }
-
-    def _fetch_timeline[T](
-        self,
-        resource: str,
-        coordinates: Coordinates,
-        pages: int,
-        mapper: Callable[[mappers.Payload], T],
-    ) -> list[T]:
-        """Percorre até ``pages`` páginas seguindo o campo ``next`` da resposta."""
-        if pages <= 0:
-            return []
-
-        payload = self._request(
-            f"{ONE_CALL}/timeline/{resource}", self._weather_params(coordinates)
-        )
-        records: list[T] = []
-        for page in range(pages):
-            records.extend(mapper(item) for item in self._records(payload))
-            next_url = payload.get("next") if isinstance(payload, Mapping) else None
-            if not next_url or page == pages - 1:
-                break
-            payload = self._request_next(str(next_url))
-            if payload is None:
-                break
-        return records
-
-    @staticmethod
-    def _records(payload: Any) -> list[mappers.Payload]:
-        if not isinstance(payload, Mapping) or not isinstance(payload.get("data"), list):
-            raise PayloadError("A resposta da linha do tempo não contém a lista 'data'.")
-        records: list[mappers.Payload] = []
-        for item in payload["data"]:
-            if not isinstance(item, Mapping):
-                raise PayloadError(f"Registro inesperado na linha do tempo: {type(item).__name__}.")
-            records.append(item)
-        return records
-
-    def _request_next(self, url: str) -> Any | None:
-        target = httpx.URL(url)
-        if target.host != httpx.URL(self._base_url).host:
-            logger.warning(
-                "URL de paginação para host inesperado (%s); interrompendo.", target.host
-            )
-            return None
-        params = dict(target.params)
-        params.update({"units": self._units, "lang": self._lang})
-        return self._request(target.path, params)
 
     def _request(self, path: str, params: Mapping[str, Any]) -> Any:
         query = {**params, "appid": self._api_key}
@@ -229,7 +166,8 @@ class OpenWeatherClient(GeocodingProvider, WeatherProvider):
         status = response.status_code
         if status == 401:
             raise AuthenticationError(
-                f"Chave da OpenWeather inválida ou sem acesso ao produto (HTTP 401) em {path}."
+                "Chave da OpenWeather inválida, ainda não ativada ou sem acesso ao produto "
+                f"(HTTP 401) em {path}."
             )
         if status == 404:
             raise ResourceNotFoundError(f"Recurso não encontrado (HTTP 404): {path}.")

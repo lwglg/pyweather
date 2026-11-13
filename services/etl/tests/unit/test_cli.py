@@ -12,7 +12,12 @@ from pyweather_etl.infrastructure.persistence.database import (
     create_db_engine,
     create_session_factory,
 )
-from pyweather_etl.infrastructure.persistence.models import CurrentWeatherModel, LocationModel
+from pyweather_etl.infrastructure.persistence.models import (
+    CurrentWeatherModel,
+    DailyForecastModel,
+    HourlyForecastModel,
+    LocationModel,
+)
 
 
 @pytest.fixture
@@ -57,15 +62,9 @@ def patch_http(monkeypatch: pytest.MonkeyPatch, payloads: dict[str, object]) -> 
 
 @pytest.fixture
 def http_payloads(
-    current_payload: dict[str, object], hourly_record: dict[str, object]
+    current_payload: dict[str, object], forecast_payload: dict[str, object]
 ) -> dict[str, object]:
-    return {
-        "/current": current_payload,
-        "/1h": {"data": [hourly_record]},
-        "/1day": {"data": []},
-        "/ALERT-1": {"id": "ALERT-1", "start": 1, "end": 2},
-        "/ALERT-2": {"id": "ALERT-2", "start": 1, "end": 2},
-    }
+    return {"/weather": current_payload, "/forecast": forecast_payload}
 
 
 def test_migrate(settings: Settings) -> None:
@@ -83,6 +82,8 @@ def test_run_once_extrai_e_persiste(
 
     assert count(settings, LocationModel) == 1
     assert count(settings, CurrentWeatherModel) == 1
+    assert count(settings, HourlyForecastModel) == 4
+    assert count(settings, DailyForecastModel) == 2
 
 
 def test_serve_executa_e_encerra(

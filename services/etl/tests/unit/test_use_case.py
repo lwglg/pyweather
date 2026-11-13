@@ -9,6 +9,7 @@ from pyweather_etl.domain.entities import (
     CurrentSnapshot,
     CurrentWeather,
     DailyForecast,
+    Forecast,
     HourlyForecast,
     Location,
     WeatherAlert,
@@ -33,7 +34,6 @@ HOURLY = HourlyForecast(
     forecast_at=NOW, temperature=20.0, feels_like=20.0, pressure=1010, humidity=50
 )
 DAILY = DailyForecast(forecast_at=NOW, temperature=DailyTemperature(day=25.0))
-ALERT = WeatherAlert("A1", "INMET", "Chuva", NOW, NOW)
 
 
 class FakeGeocoder(GeocodingProvider):
@@ -49,25 +49,16 @@ class FakeGeocoder(GeocodingProvider):
 
 
 class FakeProvider(WeatherProvider):
-    def __init__(self, alert_ids: tuple[str, ...] = ("A1",)) -> None:
-        self.alert_ids = alert_ids
+    def __init__(self) -> None:
         self.calls: list[str] = []
 
     def fetch_current(self, coordinates: Coordinates) -> CurrentSnapshot:
         self.calls.append("current")
-        return CurrentSnapshot(WEATHER, TZ, self.alert_ids)
+        return CurrentSnapshot(WEATHER, TZ)
 
-    def fetch_hourly(self, coordinates: Coordinates, pages: int) -> list[HourlyForecast]:
-        self.calls.append(f"hourly:{pages}")
-        return [HOURLY]
-
-    def fetch_daily(self, coordinates: Coordinates, pages: int) -> list[DailyForecast]:
-        self.calls.append(f"daily:{pages}")
-        return [DAILY, DAILY]
-
-    def fetch_alerts(self, alert_ids: Sequence[str]) -> list[WeatherAlert]:
-        self.calls.append("alerts")
-        return [ALERT]
+    def fetch_forecast(self, coordinates: Coordinates) -> Forecast:
+        self.calls.append("forecast")
+        return Forecast(steps=(HOURLY,), daily=(DAILY, DAILY))
 
 
 class FakeRepository(WeatherRepository):
@@ -133,15 +124,9 @@ def test_fluxo_completo_com_geocodificacao() -> None:
     report = use_case.execute()
 
     assert geocoder.calls == 1
-    assert provider.calls == ["current", "hourly:3", "daily:1", "alerts"]
+    assert provider.calls == ["current", "forecast"]
     assert repository.timezones == [(7, TZ)]
-    assert (report.location_id, report.current, report.hourly, report.daily, report.alerts) == (
-        7,
-        1,
-        1,
-        2,
-        1,
-    )
+    assert (report.location_id, report.current, report.hourly, report.daily) == (7, 1, 1, 2)
     assert report.fetched_at == NOW
 
 
@@ -173,31 +158,21 @@ def test_local_e_resolvido_uma_unica_vez() -> None:
     assert len(repository.upserts) == 1
 
 
-def test_opcoes_desabilitam_etapas() -> None:
+def test_sem_previsao_consulta_apenas_condicoes_atuais() -> None:
     provider = FakeProvider()
     repository = FakeRepository()
     use_case = build(
         spec=LocationSpec("X", "BR", coordinates=COORDS),
         provider=provider,
         repository=repository,
-        options=SyncOptions(hourly_pages=0, daily_pages=0, include_alerts=False),
+        options=SyncOptions(include_forecast=False),
     )
 
     report = use_case.execute()
 
     assert provider.calls == ["current"]
-    assert (report.hourly, report.daily, report.alerts) == (0, 0, 0)
+    assert (report.hourly, report.daily) == (0, 0)
     assert "hourly" not in repository.saved
-
-
-def test_sem_alertas_nao_consulta_detalhes() -> None:
-    provider = FakeProvider(alert_ids=())
-    use_case = build(spec=LocationSpec("X", "BR", coordinates=COORDS), provider=provider)
-
-    report = use_case.execute()
-
-    assert "alerts" not in provider.calls
-    assert report.alerts == 0
 
 
 def test_cidade_nao_encontrada_propaga_erro() -> None:

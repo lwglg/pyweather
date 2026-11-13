@@ -95,7 +95,7 @@ COMMANDS: dict[str, Callable[[Settings], int]] = {
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pyweather-etl",
-        description="ETL de dados climáticos: OpenWeather One Call 4.0 → PostgreSQL.",
+        description="ETL de dados climáticos: OpenWeather (plano gratuito) → PostgreSQL.",
     )
     parser.add_argument("command", choices=sorted(COMMANDS), help="comando a executar")
     return parser

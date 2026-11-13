@@ -47,9 +47,7 @@ def build_use_case(
         repository=repository,
         spec=settings.location_spec,
         options=SyncOptions(
-            hourly_pages=settings.etl_hourly_pages,
-            daily_pages=settings.etl_daily_pages,
-            include_alerts=settings.etl_include_alerts,
+            include_forecast=settings.etl_include_forecast,
         ),
     )
     return use_case, client

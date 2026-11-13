@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore", case_sensitive=False)
 
     # --- OpenWeather ---------------------------------------------------------
-    openweather_api_key: SecretStr = SecretStr("fd9de68f6804568e0b270a220fd06b0f")
+    openweather_api_key: SecretStr = SecretStr("")
     openweather_base_url: str = "https://api.openweathermap.org"
     openweather_units: Literal["standard", "metric", "imperial"] = "metric"
     openweather_lang: str = "pt_br"
@@ -33,9 +33,8 @@ class Settings(BaseSettings):
 
     # --- Extração ------------------------------------------------------------
     etl_interval_seconds: int = Field(default=3600, ge=60)
-    etl_hourly_pages: int = Field(default=3, ge=0, le=10)
-    etl_daily_pages: int = Field(default=1, ge=0, le=10)
-    etl_include_alerts: bool = True
+    # Desative para consumir apenas as condições atuais (1 chamada em vez de 2 por extração).
+    etl_include_forecast: bool = True
 
     # --- PostgreSQL ----------------------------------------------------------
     postgres_host: str = "localhost"

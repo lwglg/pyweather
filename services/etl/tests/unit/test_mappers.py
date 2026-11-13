@@ -14,103 +14,202 @@ def test_current_snapshot_completo(current_payload: dict[str, Any]) -> None:
     weather = snapshot.weather
     assert weather.observed_at == datetime.fromtimestamp(1_777_449_371, tz=UTC)
     assert weather.temperature == 24.5
+    assert weather.feels_like == 25.1
+    assert weather.pressure == 1018
     assert weather.humidity == 70
+    assert weather.clouds == 40
+    assert weather.visibility == 10000
     assert weather.wind.speed == 4.2
     assert weather.wind.direction == 120
     assert weather.wind.gust == 7.1
     assert weather.precipitation.rain == 0.4
     assert weather.precipitation.snow is None
+    assert weather.precipitation.probability is None
+    assert weather.dew_point is None
+    assert weather.uvi is None
     assert weather.condition is not None
     assert weather.condition.code == 500
     assert weather.condition.description == "chuva leve"
-    assert weather.sunrise is not None
-    assert snapshot.timezone.name == "America/Sao_Paulo"
+    assert weather.sunrise == datetime.fromtimestamp(1_777_437_375, tz=UTC)
+    assert snapshot.timezone.name == "UTC-03:00"
     assert snapshot.timezone.offset_seconds == -10800
-    assert snapshot.alert_ids == ("ALERT-1", "ALERT-2")
 
 
 def test_current_sem_campos_opcionais(current_payload: dict[str, Any]) -> None:
-    record = current_payload["data"][0]
-    for key in ("dew_point", "uvi", "weather", "alerts", "rain", "wind_gust", "sunrise"):
-        record.pop(key)
+    for key in ("weather", "rain", "wind", "clouds", "sys", "visibility"):
+        current_payload.pop(key)
 
-    snapshot = mappers.map_current_snapshot(current_payload)
+    weather = mappers.map_current_snapshot(current_payload).weather
 
-    assert snapshot.weather.condition is None
-    assert snapshot.weather.dew_point is None
-    assert snapshot.weather.sunrise is None
-    assert snapshot.alert_ids == ()
+    assert weather.condition is None
+    assert weather.wind.speed is None
+    assert weather.precipitation.rain is None
+    assert weather.clouds is None
+    assert weather.sunrise is None
 
 
-@pytest.mark.parametrize("missing", ["dt", "temp", "feels_like", "pressure", "humidity"])
+@pytest.mark.parametrize("missing", ["dt", "main", "timezone"])
 def test_current_campo_obrigatorio_ausente(current_payload: dict[str, Any], missing: str) -> None:
-    current_payload["data"][0].pop(missing)
+    current_payload.pop(missing)
     with pytest.raises(PayloadError, match=missing):
         mappers.map_current_snapshot(current_payload)
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [[], "texto", {"timezone": "UTC", "timezone_offset": 0, "data": []}],
-)
+@pytest.mark.parametrize("missing", ["temp", "feels_like", "pressure", "humidity"])
+def test_current_campo_principal_ausente(current_payload: dict[str, Any], missing: str) -> None:
+    current_payload["main"].pop(missing)
+    with pytest.raises(PayloadError, match=missing):
+        mappers.map_current_snapshot(current_payload)
+
+
+@pytest.mark.parametrize("payload", [[], "texto", {"timezone": 0, "main": "x", "dt": 1}])
 def test_current_payload_invalido(payload: Any) -> None:
     with pytest.raises(PayloadError):
         mappers.map_current_snapshot(payload)
 
 
 def test_valor_numerico_invalido(current_payload: dict[str, Any]) -> None:
-    current_payload["data"][0]["temp"] = "quente"
+    current_payload["main"]["temp"] = "quente"
     with pytest.raises(PayloadError, match="temp"):
         mappers.map_current_snapshot(current_payload)
 
 
 def test_timestamp_invalido(current_payload: dict[str, Any]) -> None:
-    current_payload["data"][0]["dt"] = "ontem"
+    current_payload["dt"] = "ontem"
     with pytest.raises(PayloadError, match="dt"):
         mappers.map_current_snapshot(current_payload)
 
 
-def test_hourly(hourly_record: dict[str, Any]) -> None:
-    forecast = mappers.map_hourly(hourly_record)
-
-    assert forecast.forecast_at == datetime.fromtimestamp(1_777_453_200, tz=UTC)
-    assert forecast.precipitation.probability == 0.35
-    assert forecast.precipitation.rain == 0.2
-    assert forecast.condition is not None
-    assert forecast.condition.main == "Clouds"
-    assert forecast.visibility == 9000
+def test_vento_e_chuva_devem_ser_objetos(current_payload: dict[str, Any]) -> None:
+    current_payload["wind"] = 4.2
+    with pytest.raises(PayloadError, match="wind"):
+        mappers.map_current_snapshot(current_payload)
 
 
-def test_daily_com_chuva_como_numero(daily_record: dict[str, Any]) -> None:
-    forecast = mappers.map_daily(daily_record)
-
-    assert forecast.temperature.min == 20.1
-    assert forecast.temperature.max == 28.3
-    assert forecast.temperature.evening == 25.0
-    assert forecast.feels_like.morning == 21.2
-    assert forecast.precipitation.rain == 1.5
-    assert forecast.moon_phase == 0.43
-    assert forecast.moonrise is not None
+@pytest.mark.parametrize(
+    ("offset", "name"),
+    [(-10800, "UTC-03:00"), (0, "UTC+00:00"), (19800, "UTC+05:30"), (-12600, "UTC-03:30")],
+)
+def test_nome_do_fuso_derivado_do_deslocamento(offset: int, name: str) -> None:
+    timezone = mappers.timezone_from_offset(offset)
+    assert (timezone.name, timezone.offset_seconds) == (name, offset)
 
 
-def test_daily_chuva_no_formato_documentado(daily_record: dict[str, Any]) -> None:
-    daily_record["rain"] = {"1h": 2.5}
-    daily_record["snow"] = {"1h": 0.1}
-    forecast = mappers.map_daily(daily_record)
-    assert forecast.precipitation.rain == 2.5
-    assert forecast.precipitation.snow == 0.1
+def test_forecast_passos(forecast_payload: dict[str, Any]) -> None:
+    forecast = mappers.map_forecast(forecast_payload)
+
+    assert len(forecast.steps) == 4
+    first = forecast.steps[0]
+    assert first.forecast_at == datetime(2026, 11, 12, 15, 0, tzinfo=UTC)
+    assert first.temperature == 24.0
+    assert first.precipitation.probability == 0.35
+    assert first.precipitation.rain == 0.5
+    assert first.clouds == 60
+    assert first.visibility == 9000
+    assert first.condition is not None
+    assert first.condition.main == "Clouds"
+    assert [step.forecast_at for step in forecast.steps] == sorted(
+        step.forecast_at for step in forecast.steps
+    )
 
 
-def test_daily_sem_sensacao_termica(daily_record: dict[str, Any]) -> None:
-    daily_record.pop("feels_like")
-    forecast = mappers.map_daily(daily_record)
-    assert forecast.feels_like.day is None
+def test_forecast_resumo_diario_por_dia_civil_local(forecast_payload: dict[str, Any]) -> None:
+    daily = mappers.map_forecast(forecast_payload).daily
+
+    assert len(daily) == 2
+    day1, day2 = daily
+    # O dia civil local (UTC-3) começa às 03:00 UTC.
+    assert day1.forecast_at == datetime(2026, 11, 12, 3, 0, tzinfo=UTC)
+    assert day2.forecast_at == datetime(2026, 11, 13, 3, 0, tzinfo=UTC)
+
+    assert day1.temperature.min == 23.0
+    assert day1.temperature.max == 29.5
+    assert day1.temperature.day == 26.0
+    assert day1.temperature.night is None
+    assert day1.feels_like.day == 26.8
+    assert day1.pressure == 1016
+    assert day1.humidity == 65
+    assert day1.clouds == 60
+    assert day1.wind.speed == 5.5
+    assert day1.wind.direction == 90
+    assert day1.wind.gust == 9.0
+    assert day1.precipitation.rain == 1.75
+    assert day1.precipitation.probability == 0.8
+    assert day1.condition is not None
+    assert day1.condition.code == 803
 
 
-def test_daily_temp_deve_ser_objeto(daily_record: dict[str, Any]) -> None:
-    daily_record["temp"] = 25.0
-    with pytest.raises(PayloadError, match="temp"):
-        mappers.map_daily(daily_record)
+def test_forecast_resumo_diario_com_dados_ausentes(forecast_payload: dict[str, Any]) -> None:
+    day2 = mappers.map_forecast(forecast_payload).daily[1]
+
+    assert day2.precipitation.rain == 0.25
+    assert day2.precipitation.snow is None
+    assert day2.precipitation.probability == 0.2
+    assert day2.wind.speed == 3.8
+    assert day2.condition is not None
+    assert day2.condition.code == 500
+
+
+def test_forecast_sem_clima_nem_vento_nem_chuva(forecast_payload: dict[str, Any]) -> None:
+    for item in forecast_payload["list"]:
+        for key in ("weather", "wind", "rain", "clouds", "pop"):
+            item.pop(key, None)
+
+    daily = mappers.map_forecast(forecast_payload).daily
+
+    assert daily[0].condition is None
+    assert daily[0].wind.speed is None
+    assert daily[0].wind.gust is None
+    assert daily[0].precipitation.rain is None
+    assert daily[0].precipitation.probability is None
+    assert daily[0].clouds is None
+
+
+def test_forecast_usa_temp_quando_faltam_minima_e_maxima(forecast_payload: dict[str, Any]) -> None:
+    for item in forecast_payload["list"]:
+        item["main"].pop("temp_min")
+        item["main"].pop("temp_max")
+
+    day1 = mappers.map_forecast(forecast_payload).daily[0]
+    assert (day1.temperature.min, day1.temperature.max) == (24.0, 28.0)
+
+
+def test_forecast_remove_passos_duplicados_e_ordena(forecast_payload: dict[str, Any]) -> None:
+    forecast_payload["list"].append(forecast_payload["list"][0])
+    forecast_payload["list"].reverse()
+
+    forecast = mappers.map_forecast(forecast_payload)
+
+    assert len(forecast.steps) == 4
+    assert forecast.steps[0].forecast_at < forecast.steps[-1].forecast_at
+
+
+def test_forecast_lista_vazia() -> None:
+    forecast = mappers.map_forecast({"list": [], "city": {"timezone": 0}})
+    assert forecast.steps == ()
+    assert forecast.daily == ()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [],
+        {"city": {"timezone": 0}},
+        {"list": "x", "city": {"timezone": 0}},
+        {"list": ["x"], "city": {"timezone": 0}},
+        {"list": []},
+        {"list": [], "city": {}},
+    ],
+)
+def test_forecast_payload_invalido(payload: Any) -> None:
+    with pytest.raises(PayloadError):
+        mappers.map_forecast(payload)
+
+
+def test_chuva_e_neve_aceitam_janelas_de_1h_ou_3h() -> None:
+    assert mappers.map_precipitation({"rain": {"1h": 2.5}}).rain == 2.5
+    assert mappers.map_precipitation({"snow": {"3h": 0.1}}).snow == 0.1
+    assert mappers.map_precipitation({"rain": {}}).rain is None
 
 
 def test_condicao_invalida() -> None:
@@ -118,28 +217,6 @@ def test_condicao_invalida() -> None:
         mappers.map_condition({"weather": ["não é objeto"]})
     with pytest.raises(PayloadError, match=r"weather\.id"):
         mappers.map_condition({"weather": [{"id": "x"}]})
-
-
-def test_alert(alert_payload: dict[str, Any]) -> None:
-    alert = mappers.map_alert(alert_payload)
-
-    assert alert.alert_id == "ALERT-1"
-    assert alert.sender_name == "INMET"
-    assert alert.starts_at < alert.ends_at
-    assert [d.language for d in alert.descriptions] == ["pt-BR", "en-GB"]
-    assert alert.tags == ("Thunderstorm", "Rain")
-
-
-def test_alert_minimo() -> None:
-    alert = mappers.map_alert({"id": "X", "start": 1, "end": 2})
-    assert alert.descriptions == ()
-    assert alert.tags == ()
-    assert alert.event == ""
-
-
-def test_alert_sem_id() -> None:
-    with pytest.raises(PayloadError, match="id"):
-        mappers.map_alert({"start": 1, "end": 2})
 
 
 def test_geocoding(geocoding_payload: list[dict[str, Any]]) -> None:

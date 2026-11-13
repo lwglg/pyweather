@@ -20,11 +20,9 @@ def _utc_now() -> datetime:
 
 @dataclass(frozen=True, slots=True)
 class SyncOptions:
-    """Parâmetros de volume da extração (cada página consome uma chamada da API)."""
+    """Parâmetros da extração. A previsão custa 1 chamada da API; as condições atuais, outra."""
 
-    hourly_pages: int = 3
-    daily_pages: int = 1
-    include_alerts: bool = True
+    include_forecast: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,7 +34,6 @@ class SyncReport:
     current: int
     hourly: int
     daily: int
-    alerts: int
 
 
 class SyncWeatherUseCase:
@@ -70,20 +67,11 @@ class SyncWeatherUseCase:
         self._repository.update_timezone(location_id, snapshot.timezone)
         current = self._repository.save_current(location_id, snapshot.weather)
 
-        hourly = 0
-        if self._options.hourly_pages > 0:
-            forecasts = self._provider.fetch_hourly(coordinates, self._options.hourly_pages)
-            hourly = self._repository.save_hourly(location_id, forecasts)
-
-        daily = 0
-        if self._options.daily_pages > 0:
-            daily_forecasts = self._provider.fetch_daily(coordinates, self._options.daily_pages)
-            daily = self._repository.save_daily(location_id, daily_forecasts)
-
-        alerts = 0
-        if self._options.include_alerts and snapshot.alert_ids:
-            found = self._provider.fetch_alerts(snapshot.alert_ids)
-            alerts = self._repository.save_alerts(location_id, found)
+        hourly = daily = 0
+        if self._options.include_forecast:
+            forecast = self._provider.fetch_forecast(coordinates)
+            hourly = self._repository.save_hourly(location_id, forecast.steps)
+            daily = self._repository.save_daily(location_id, forecast.daily)
 
         report = SyncReport(
             location_id=location_id,
@@ -91,15 +79,13 @@ class SyncWeatherUseCase:
             current=current,
             hourly=hourly,
             daily=daily,
-            alerts=alerts,
         )
         logger.info(
-            "Sincronização concluída: local=%s atual=%d horária=%d diária=%d alertas=%d",
+            "Sincronização concluída: local=%s atual=%d previsão-passos=%d previsão-diária=%d",
             location_id,
             report.current,
             report.hourly,
             report.daily,
-            report.alerts,
         )
         return report
 

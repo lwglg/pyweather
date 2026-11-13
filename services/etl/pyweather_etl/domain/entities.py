@@ -49,7 +49,7 @@ class CurrentWeather:
 
 @dataclass(frozen=True, slots=True)
 class HourlyForecast:
-    """Previsão (ou histórico) com passo de uma hora."""
+    """Previsão com passo de poucas horas (3 h no plano gratuito da OpenWeather)."""
 
     forecast_at: datetime
     temperature: float
@@ -67,7 +67,7 @@ class HourlyForecast:
 
 @dataclass(frozen=True, slots=True)
 class DailyForecast:
-    """Previsão (ou histórico) com passo de um dia."""
+    """Resumo diário, agregado dos passos de 3 h (o plano gratuito não tem previsão diária)."""
 
     forecast_at: datetime
     temperature: DailyTemperature
@@ -102,8 +102,15 @@ class WeatherAlert:
 
 @dataclass(frozen=True, slots=True)
 class CurrentSnapshot:
-    """Resultado da consulta de condições atuais: observação, fuso e alertas associados."""
+    """Resultado da consulta de condições atuais: observação e fuso horário do local."""
 
     weather: CurrentWeather
     timezone: TimezoneInfo
-    alert_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class Forecast:
+    """Previsão do tempo: passos de poucas horas e o resumo diário derivado deles."""
+
+    steps: tuple[HourlyForecast, ...] = ()
+    daily: tuple[DailyForecast, ...] = ()
