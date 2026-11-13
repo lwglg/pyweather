@@ -43,6 +43,14 @@ jobs:
       - name: Smoke tests (Docker Compose + Newman)
         run: make smoke
 
+      - name: Corrige permissões do relatório JUnit
+        if: always()
+        run: |
+          # Ajuste o caminho conforme o local real do arquivo no host
+          sudo chown -R runner:runner build/smoke/ || true
+          # Ou, se o arquivo estiver realmente em /results:
+          # sudo chown -R runner:runner /results || true
+
       - name: Publica o relatório JUnit
         if: always()
         uses: actions/upload-artifact@v4
