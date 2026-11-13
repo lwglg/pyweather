@@ -7,11 +7,9 @@
 .DEFAULT_GOAL := help
 SHELL := /usr/bin/env bash
 
-PROJECT      	:= pyweather
-COMPOSE_FILE 	:= infra/docker/docker-compose.yml
-COMPOSE      	:= docker compose -f $(COMPOSE_FILE) -p gntech-$(PROJECT)
-ETL_MODULE_DIR	:= ./services/etl
-API_MODULE_DIR	:= ./service/api
+PROJECT      := pyweather
+COMPOSE_FILE := infra/docker/docker-compose.yml
+COMPOSE      := docker compose -f $(COMPOSE_FILE) -p gntech-$(PROJECT)
 
 # Alvo dos scripts de qualidade: etl | api | all  (ex.: make test TARGET=api)
 TARGET ?= all
@@ -74,16 +72,16 @@ docs-render: ## Renderiza os .mmd em SVG (requer mmdc) para validar a sintaxe
 ##@ Execução local (sem Docker)
 .PHONY: migrate etl-run etl-serve api-dev
 migrate: ## Aplica as migrações do banco (requer POSTGRES_* no ambiente)
-	uv run --directory $(ETL_MODULE_DIR) python -m pyweather_etl migrate
+	PYTHONPATH=services/etl uv run python -m pyweather_etl migrate
 
 etl-run: ## Executa uma extração única do ETL
-	uv run --directory $(ETL_MODULE_DIR) python -m pyweather_etl run
+	PYTHONPATH=services/etl uv run python -m pyweather_etl run
 
 etl-serve: ## Executa o ETL em loop (migra e agenda extrações)
-	uv run --directory $(ETL_MODULE_DIR) python -m pyweather_etl serve
+	PYTHONPATH=services/etl uv run python -m pyweather_etl serve
 
 api-dev: ## Sobe a API com autoreload em http://localhost:8000/docs
-	uv run --directory $(API_MODULE_DIR) uvicorn pyweather_api.main:app --reload --app-dir $(API_MODULE_DIR)
+	uv run uvicorn pyweather_api.main:app --reload --app-dir services/api
 
 ##@ Smoke tests (Postman/Newman)
 .PHONY: smoke smoke-up smoke-run smoke-down smoke-logs smoke-local
