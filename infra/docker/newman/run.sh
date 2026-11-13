@@ -5,12 +5,12 @@ set -eu
 
 : "${POSTMAN_COLLECTION:=pyweather.postman_collection.json}"
 : "${POSTMAN_ENVIRONMENT:=pyweather.docker.postman_environment.json}"
-: "${WAIT_URL:=http://api:8000/v1/locations/1/alerts}"
+: "${WAIT_URL:=http://api:8000/v1/locations/1/forecast/daily}"
 : "${WAIT_TIMEOUT:=180}"
 : "${RESULTS_DIR:=/results}"
 
-# O ETL grava na ordem: local → atual → horária → diária → alertas. Quando a lista de alertas tem
-# ao menos um item, todas as etapas anteriores já foram concluídas.
+# O ETL grava na ordem: local → atual → passos de 3 h → resumo diário. Quando a previsão diária
+# tem ao menos um item, todas as etapas já foram concluídas.
 echo ">> aguardando dados do ETL em ${WAIT_URL} (limite: ${WAIT_TIMEOUT}s)"
 elapsed=0
 until wget -qO- "${WAIT_URL}" 2>/dev/null | grep -Eq '"total": ?[1-9]'; do
