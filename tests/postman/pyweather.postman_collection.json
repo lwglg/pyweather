@@ -160,7 +160,7 @@
                   "    pm.test(\"Cidade esperada (fixture do mock)\", () => {",
                   "        pm.expect(chosen.name).to.eql(expected);",
                   "        pm.expect(chosen.country).to.eql(\"BR\");",
-                  "        pm.expect(chosen.timezone).to.eql(\"America/Sao_Paulo\");",
+                  "        pm.expect(chosen.timezone).to.eql(\"UTC-03:00\");",
                   "        pm.expect(chosen.timezone_offset).to.eql(-10800);",
                   "    });",
                   "}"
@@ -828,8 +828,8 @@
       ]
     },
     {
-      "name": "4. Previsão horária",
-      "description": "Previsão com passo de uma hora (paginada pela OpenWeather e consolidada pelo ETL).",
+      "name": "4. Previsão (passos de 3 h)",
+      "description": "Previsão de 5 dias com passo de 3 horas (5 Day / 3 Hour Forecast, plano gratuito da OpenWeather).",
       "item": [
         {
           "name": "Listar previsão horária",
@@ -866,7 +866,7 @@
                   "});",
                   "pm.test(\"Há previsões\", () => pm.expect(body().total).to.be.at.least(1));",
                   "if (strict) {",
-                  "    pm.test(\"3 páginas × 20 horas (paginação 'next' seguida pelo ETL)\", () => {",
+                  "    pm.test(\"40 passos de 3 h (5 dias × 8)\", () => {",
                   "        pm.expect(body().total).to.eql(parseInt(pm.environment.get(\"expectedHourlyTotal\"), 10));",
                   "    });",
                   "}"
@@ -920,7 +920,7 @@
                   "",
                   "pm.test(\"Todos com pop ≥ 0,5\", () => body().items.forEach((h) => pm.expect(h.pop).to.be.at.least(0.5)));",
                   "if (strict) {",
-                  "    pm.test(\"Total esperado (pop = hora % 10 / 10; 5 de cada 10 horas ≥ 0,5)\", () => {",
+                  "    pm.test(\"Total esperado (pop = passo % 10 / 10; 5 de cada 10 passos ≥ 0,5)\", () => {",
                   "        pm.expect(body().total).to.eql(parseInt(pm.environment.get(\"expectedHourlyPop50Total\"), 10));",
                   "    });",
                   "}"
@@ -1173,7 +1173,7 @@
     },
     {
       "name": "5. Previsão diária",
-      "description": "Previsão com passo de um dia (temperaturas por período, chuva, sol e lua).",
+      "description": "Resumo diário derivado pelo ETL a partir dos passos de 3 h (dias civis do local; o 1º e o último podem ser parciais).",
       "item": [
         {
           "name": "Listar previsão diária",
@@ -1208,13 +1208,19 @@
                   "});",
                   "pm.test(\"Há previsões\", () => pm.expect(body().total).to.be.at.least(1));",
                   "if (strict) {",
-                  "    pm.test(\"Total de dias da fixture\", () => {",
-                  "        pm.expect(body().total).to.eql(parseInt(pm.environment.get(\"expectedDailyTotal\"), 10));",
+                  "    pm.test(\"5 ou 6 dias civis (40 passos de 3 h cruzam 5 ou 6 datas locais)\", () => {",
+                  "        pm.expect(body().total).to.be.within(",
+                  "            parseInt(pm.environment.get(\"expectedDailyMin\"), 10),",
+                  "            parseInt(pm.environment.get(\"expectedDailyMax\"), 10),",
+                  "        );",
                   "    });",
-                  "    pm.test(\"Dados de lua e sol\", () => {",
-                  "        const d = body().items[0];",
-                  "        pm.expect(d.moon_phase).to.eql(0.43);",
-                  "        pm.expect(d.sunrise).to.be.a(\"string\");",
+                  "    pm.test(\"Campos derivados (o plano gratuito não traz lua nem previsão por período)\", () => {",
+                  "        body().items.forEach((d) => {",
+                  "            pm.expect(num(d.temp_day)).to.be.true;",
+                  "            pm.expect(d.temp_night).to.be.null;",
+                  "            pm.expect(d.moon_phase).to.be.null;",
+                  "            pm.expect(d.condition.description).to.eql(\"nublado\");",
+                  "        });",
                   "    });",
                   "}"
                 ]
@@ -1265,10 +1271,7 @@
                   "",
                   "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
                   "",
-                  "pm.test(\"Todos com máxima ≤ 27\", () => body().items.forEach((d) => pm.expect(d.temp_max).to.be.at.most(27)));",
-                  "if (strict) {",
-                  "    pm.test(\"3 dias (máximas 25, 26 e 27)\", () => pm.expect(body().total).to.eql(3));",
-                  "}"
+                  "pm.test(\"Todos com máxima ≤ 27\", () => body().items.forEach((d) => pm.expect(d.temp_max).to.be.at.most(27)));"
                 ]
               }
             }
@@ -1322,7 +1325,7 @@
                   "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
                   "",
                   "pm.test(\"Todos casam com a condição\", () => {",
-                  "    body().items.forEach((d) => pm.expect(`${d.condition.main} ${d.condition.description}`.toLowerCase()).to.include(\"céu\"));",
+                  "    body().items.forEach((d) => pm.expect(`${d.condition.main} ${d.condition.description}`.toLowerCase()).to.include(\"nubl\"));",
                   "});"
                 ]
               }
@@ -1337,7 +1340,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/forecast/daily?condition=c%C3%A9u",
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/forecast/daily?condition=nubl",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1351,7 +1354,7 @@
               "query": [
                 {
                   "key": "condition",
-                  "value": "c%C3%A9u"
+                  "value": "nubl"
                 }
               ]
             },
@@ -1362,7 +1365,7 @@
     },
     {
       "name": "6. Alertas",
-      "description": "Alertas meteorológicos oficiais.",
+      "description": "Alertas meteorológicos: o endpoint existe, mas o plano gratuito da OpenWeather não os fornece (apenas a One Call, paga).",
       "item": [
         {
           "name": "Listar alertas",
@@ -1385,7 +1388,7 @@
                   "    pm.expect(b.items.length).to.be.at.most(b.limit);",
                   "});",
                   "",
-                  "pm.test(\"Estrutura do alerta\", () => {",
+                  "pm.test(\"Estrutura do alerta (quando houver)\", () => {",
                   "    body().items.forEach((a) => {",
                   "        pm.expect(a.alert_id).to.be.a(\"string\");",
                   "        pm.expect(Date.parse(a.starts_at)).to.be.at.most(Date.parse(a.ends_at));",
@@ -1394,14 +1397,9 @@
                   "    });",
                   "});",
                   "if (strict) {",
-                  "    pm.test(\"Alerta da fixture\", () => {",
-                  "        pm.expect(body().total).to.be.at.least(1);",
-                  "        const a = body().items.find((x) => x.alert_id === \"MOCK-ALERT-1\");",
-                  "        pm.expect(a, \"MOCK-ALERT-1\").to.exist;",
-                  "        pm.expect(a.event).to.eql(\"Tempestade\");",
-                  "        pm.expect(a.sender_name).to.include(\"Defesa Civil\");",
-                  "        pm.expect(a.descriptions.map((d) => d.language)).to.have.members([\"pt-BR\", \"en-GB\"]);",
-                  "        pm.expect(a.tags).to.have.members([\"Thunderstorm\", \"Rain\"]);",
+                  "    pm.test(\"Sem alertas: o ETL do plano gratuito não os extrai\", () => {",
+                  "        pm.expect(body().total).to.eql(0);",
+                  "        pm.expect(body().items).to.be.empty;",
                   "    });",
                   "}"
                 ]
@@ -1452,10 +1450,7 @@
                   "        pm.expect(Date.parse(a.starts_at)).to.be.at.most(now);",
                   "        pm.expect(Date.parse(a.ends_at)).to.be.at.least(now);",
                   "    });",
-                  "});",
-                  "if (strict) {",
-                  "    pm.test(\"Alerta da fixture está vigente\", () => pm.expect(body().total).to.be.at.least(1));",
-                  "}"
+                  "});"
                 ]
               }
             }
@@ -1483,54 +1478,6 @@
                 {
                   "key": "active_at",
                   "value": "{{nowIso}}"
-                }
-              ]
-            },
-            "description": ""
-          }
-        },
-        {
-          "name": "Alertas vigentes no passado distante (nenhum)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const strict = pm.environment.get(\"strict\") === \"true\";",
-                  "const body = () => pm.response.json();",
-                  "const num = (v) => typeof v === \"number\";",
-                  "",
-                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
-                  "",
-                  "pm.test(\"Nenhum resultado\", () => pm.expect(body().total).to.eql(0));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/alerts?active_at=2000-01-01T00:00:00Z",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "locations",
-                "{{locationId}}",
-                "alerts"
-              ],
-              "query": [
-                {
-                  "key": "active_at",
-                  "value": "2000-01-01T00:00:00Z"
                 }
               ]
             },
