@@ -1,0 +1,64 @@
+name: API — QA
+
+on:
+  push:
+    branches: [main,master]
+    paths:
+      - "services/api/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "ruff.toml"
+      - "scripts/sh/**"
+      - ".github/workflows/api-qa.yml"
+  pull_request:
+    paths:
+      - "services/api/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "ruff.toml"
+      - "scripts/sh/**"
+      - ".github/workflows/api-qa.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa:
+    name: Formatação, Mypy, lint e testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instala o uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Instala as dependências (grupo api + dev)
+        run: make install-api
+
+      - name: Formatação (Ruff)
+        run: make format-check TARGET=api
+
+      - name: Lint (Ruff)
+        run: make lint TARGET=api
+
+      - name: Tipagem (Mypy)
+        run: make typecheck TARGET=api
+
+      - name: Testes unitários (cobertura ≥ 80%)
+        run: make test TARGET=api
+
+      - name: Publica o relatório de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage
+          path: coverage-api.xml
+          if-no-files-found: ignore
