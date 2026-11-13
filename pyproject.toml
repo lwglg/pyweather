@@ -1,0 +1,76 @@
+[project]
+name = "pyweather"
+version = "0.1.0"
+description = "Plataforma de dados climáticos: ETL OpenWeather (One Call 4.0) → PostgreSQL e API RESTful (FastAPI)."
+readme = "README.md"
+requires-python = ">=3.14,<3.15"
+license = { text = "MIT" }
+# Dependências de runtime ficam em grupos por serviço (veja [dependency-groups]),
+# de modo que cada imagem Docker instale apenas o que realmente usa.
+dependencies = []
+
+[dependency-groups]
+etl = [
+    "alembic>=1.16",
+    "httpx>=0.28",
+    "psycopg[binary]>=3.2",
+    "pydantic>=2.12",
+    "pydantic-settings>=2.10",
+    "sqlalchemy>=2.0.40",
+]
+api = [
+    "fastapi[standard]>=0.115",
+    "psycopg[binary]>=3.2",
+    "pydantic-settings>=2.10",
+    "sqlmodel>=0.0.24",
+]
+dev = [
+    "mypy>=1.17",
+    "pytest>=8.4",
+    "pytest-cov>=6.2",
+    "ruff>=0.12",
+]
+
+[tool.uv]
+# O repositório é um "workspace de serviços": nada aqui é publicado como pacote.
+package = false
+required-version = ">=0.11.32"
+default-groups = ["dev", "etl", "api"]
+
+# ---------------------------------------------------------------------------
+# pytest / coverage
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["services"]
+pythonpath = ["services/etl", "services/api"]
+addopts = "-ra --import-mode=importlib"
+markers = [
+    "integration: testes que exigem serviços externos (ex.: PostgreSQL real)",
+]
+
+[tool.coverage.run]
+branch = true
+omit = ["*/__main__.py", "*/tests/*"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_empty = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]
+
+# ---------------------------------------------------------------------------
+# mypy
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.14"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = ["services/etl", "services/api"]
+explicit_package_bases = true
+namespace_packages = true
+warn_unreachable = true

@@ -1,0 +1,62 @@
+# Linting e formatação do monorepo via Ruff.
+target-version = "py314"
+line-length = 100
+src = ["services/etl", "services/api"]
+extend-exclude = [".venv", "build", "dist"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = true
+
+[lint]
+select = [
+    "E",    # pycodestyle (erros) — inclui separação de código (linhas em branco, E30x)
+    "W",    # pycodestyle (avisos)
+    "F",    # pyflakes
+    "I",    # isort (ordenação de imports)
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "C90",  # McCabe (complexidade ciclomática)
+    "DTZ",  # flake8-datetimez (datas sempre com timezone)
+    "SIM",  # flake8-simplify
+    "PT",   # flake8-pytest-style
+    "T20",  # flake8-print
+    "TID",  # flake8-tidy-imports
+    "RUF",  # regras específicas do Ruff
+]
+ignore = [
+    "RUF001",  # caracteres ambíguos em strings (texto em português)
+    "RUF002",
+    "RUF003",
+]
+
+[lint.mccabe]
+max-complexity = 10
+
+[lint.isort]
+known-first-party = ["pyweather_etl", "pyweather_api"]
+combine-as-imports = true
+lines-after-imports = 2
+split-on-trailing-comma = true
+
+[lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+]
+
+[lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[lint.per-file-ignores]
+# Os scripts de CLI podem usar print para saída ao usuário.
+"services/etl/pyweather_etl/cli.py" = ["T20"]
+# O mock da OpenWeather (smoke tests) registra em stdout.
+"infra/docker/mock-openweather/server.py" = ["T20"]
+# Migrações Alembic seguem o formato gerado pela ferramenta.
+"services/etl/pyweather_etl/infrastructure/persistence/migrations/versions/*.py" = ["E501"]
