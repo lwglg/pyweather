@@ -1,5 +1,7 @@
 # pyweather
 
+[![ETL — QA](https://github.com/lwglg/pyweather/actions/workflows/etl-qa.yml/badge.svg)](https://github.com/lwglg/pyweather/actions/workflows/etl-qa.yml) [![API — QA](https://github.com/lwglg/pyweather/actions/workflows/api-qa.yml/badge.svg)](https://github.com/lwglg/pyweather/actions/workflows/api-qa.yml)
+
 Plataforma para **obter, armazenar e servir dados climáticos de uma cidade** a partir da API pública
 da [OpenWeather](https://openweathermap.org/api/one-call-4) (One Call API 4.0).
 
