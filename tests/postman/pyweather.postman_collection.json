@@ -1,0 +1,1746 @@
+{
+  "info": {
+    "name": "pyweather API",
+    "description": "Testes de sanidade (smoke) da API RESTful do pyweather.\n\n**Ambientes**: `pyweather.local` (http://localhost:8000) e `pyweather.docker` (http://api:8000, dentro da rede do Docker Compose).\n\nAs asserções **estritas** (valores das fixtures do mock da OpenWeather) só rodam quando a variável de ambiente `strict` é `true` (ambiente `docker`). Com `strict=false` a collection valida apenas estrutura e invariantes, e funciona contra dados reais.\n\nExecute as pastas em ordem: a requisição *Listar locais* define `locationId`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.collectionVariables.set(\"nowIso\", new Date().toISOString());"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "locationId",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Saúde",
+      "description": "Disponibilidade do serviço (liveness e readiness).",
+      "item": [
+        {
+          "name": "Liveness",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Responde em menos de 3 s\", () => pm.expect(pm.response.responseTime).to.be.below(3000));",
+                  "",
+                  "pm.test(\"status = ok\", () => pm.expect(body().status).to.eql(\"ok\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Readiness (banco acessível)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"status = ok\", () => pm.expect(body().status).to.eql(\"ok\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Locais",
+      "description": "Locais monitorados. A primeira requisição fixa `locationId` para as demais.",
+      "item": [
+        {
+          "name": "Listar locais",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Content-Type é JSON\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.match(/application\\/json/));",
+                  "",
+                  "pm.test(\"Envelope de paginação (items, total, limit, offset)\", () => {",
+                  "    const b = body();",
+                  "    pm.expect(b.items).to.be.an(\"array\");",
+                  "    [\"total\", \"limit\", \"offset\"].forEach((k) => pm.expect(b[k], k).to.be.a(\"number\"));",
+                  "    pm.expect(b.items.length).to.be.at.most(b.limit);",
+                  "});",
+                  "",
+                  "pm.test(\"Há ao menos um local extraído pelo ETL\", () => pm.expect(body().total).to.be.at.least(1));",
+                  "pm.test(\"Campos do local\", () => {",
+                  "    const l = body().items[0];",
+                  "    [\"id\", \"latitude\", \"longitude\"].forEach((k) => pm.expect(l[k], k).to.be.a(\"number\"));",
+                  "    [\"name\", \"country\"].forEach((k) => pm.expect(l[k], k).to.be.a(\"string\"));",
+                  "    pm.expect(l.latitude).to.be.within(-90, 90);",
+                  "    pm.expect(l.longitude).to.be.within(-180, 180);",
+                  "});",
+                  "const expected = pm.environment.get(\"expectedCity\");",
+                  "const items = body().items;",
+                  "const chosen = (strict && expected && items.find((l) => l.name === expected)) || items[0];",
+                  "pm.collectionVariables.set(\"locationId\", String(chosen.id));",
+                  "if (strict) {",
+                  "    pm.test(\"Cidade esperada (fixture do mock)\", () => {",
+                  "        pm.expect(chosen.name).to.eql(expected);",
+                  "        pm.expect(chosen.country).to.eql(\"BR\");",
+                  "        pm.expect(chosen.timezone).to.eql(\"America/Sao_Paulo\");",
+                  "        pm.expect(chosen.timezone_offset).to.eql(-10800);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations"
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Filtrar por país",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Envelope de paginação (items, total, limit, offset)\", () => {",
+                  "    const b = body();",
+                  "    pm.expect(b.items).to.be.an(\"array\");",
+                  "    [\"total\", \"limit\", \"offset\"].forEach((k) => pm.expect(b[k], k).to.be.a(\"number\"));",
+                  "    pm.expect(b.items.length).to.be.at.most(b.limit);",
+                  "});",
+                  "",
+                  "pm.test(\"Todos os locais são do país filtrado (BR)\", () => {",
+                  "    body().items.forEach((l) => pm.expect(l.country).to.eql(\"BR\"));",
+                  "});",
+                  "pm.test(\"limit respeitado\", () => pm.expect(body().limit).to.eql(5));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations?country=BR&limit=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations"
+              ],
+              "query": [
+                {
+                  "key": "country",
+                  "value": "BR"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Filtrar por nome inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Nenhum resultado\", () => {",
+                  "    pm.expect(body().total).to.eql(0);",
+                  "    pm.expect(body().items).to.eql([]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations?name=zzz-inexistente",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "zzz-inexistente"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Detalhar local",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Retorna o local solicitado\", () => {",
+                  "    pm.expect(String(body().id)).to.eql(pm.collectionVariables.get(\"locationId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}"
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Local inexistente → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));",
+                  "",
+                  "pm.test(\"Mensagem de erro em português\", () => {",
+                  "    pm.expect(body().detail).to.include(\"não encontrado\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "999999"
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "ID inválido → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "0"
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Condições atuais",
+      "description": "Observação mais recente e histórico acumulado pelo ETL.",
+      "item": [
+        {
+          "name": "Condição atual mais recente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Content-Type é JSON\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.match(/application\\/json/));",
+                  "",
+                  "pm.test(\"Campos obrigatórios com tipos corretos\", () => {",
+                  "    const c = body();",
+                  "    [\"temperature\", \"feels_like\", \"pressure\", \"humidity\"].forEach((k) => pm.expect(num(c[k]), k).to.be.true);",
+                  "    pm.expect(c.humidity).to.be.within(0, 100);",
+                  "    pm.expect(Date.parse(c.observed_at)).to.not.be.NaN;",
+                  "    pm.expect(c.observed_at).to.match(/(Z|[+-]00:00)$/);",
+                  "    pm.expect(c.condition).to.have.all.keys(\"code\", \"main\", \"description\", \"icon\");",
+                  "});",
+                  "pm.collectionVariables.set(\"lastObservedAt\", body().observed_at);",
+                  "if (strict) {",
+                  "    pm.test(\"Valores da fixture do mock\", () => {",
+                  "        const c = body();",
+                  "        pm.expect(c.temperature).to.eql(parseFloat(pm.environment.get(\"expectedTemperature\")));",
+                  "        pm.expect(c.humidity).to.eql(70);",
+                  "        pm.expect(c.condition.main).to.eql(\"Rain\");",
+                  "        pm.expect(c.condition.description).to.eql(\"chuva leve\");",
+                  "        pm.expect(c.wind_speed).to.eql(4.2);",
+                  "        pm.expect(c.rain_1h).to.eql(0.4);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/current",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "current"
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Histórico de condições",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Envelope de paginação (items, total, limit, offset)\", () => {",
+                  "    const b = body();",
+                  "    pm.expect(b.items).to.be.an(\"array\");",
+                  "    [\"total\", \"limit\", \"offset\"].forEach((k) => pm.expect(b[k], k).to.be.a(\"number\"));",
+                  "    pm.expect(b.items.length).to.be.at.most(b.limit);",
+                  "});",
+                  "",
+                  "pm.test(\"Ordem cronológica decrescente (observed_at)\", () => {",
+                  "    const t = body().items.map((i) => Date.parse(i.observed_at));",
+                  "    pm.expect(t).to.eql([...t].sort((a, b) => b - a));",
+                  "});",
+                  "",
+                  "pm.test(\"Contém a observação mais recente\", () => {",
+                  "    pm.expect(body().total).to.be.at.least(1);",
+                  "    pm.expect(body().items[0].observed_at).to.eql(pm.collectionVariables.get(\"lastObservedAt\"));",
+                  "});",
+                  "pm.collectionVariables.set(\"historyTotal\", String(body().total));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/current/history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "current",
+                "history"
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Histórico com faixas amplas (não filtra nada)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Mesmo total do histórico sem filtros\", () => {",
+                  "    pm.expect(String(body().total)).to.eql(pm.collectionVariables.get(\"historyTotal\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/current/history?min_temperature=-100&max_temperature=100&min_humidity=0&max_humidity=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "current",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "min_temperature",
+                  "value": "-100"
+                },
+                {
+                  "key": "max_temperature",
+                  "value": "100"
+                },
+                {
+                  "key": "min_humidity",
+                  "value": "0"
+                },
+                {
+                  "key": "max_humidity",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Histórico por condição",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Todos os itens casam com a condição (chuva)\", () => {",
+                  "    body().items.forEach((i) => {",
+                  "        pm.expect(`${i.condition.main} ${i.condition.description}`.toLowerCase()).to.include(\"chuva\");",
+                  "    });",
+                  "});",
+                  "if (strict) {",
+                  "    pm.test(\"Fixture do mock casa com 'chuva'\", () => pm.expect(body().total).to.be.at.least(1));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/current/history?condition=chuva",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "current",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "condition",
+                  "value": "chuva"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Histórico sem resultados (temperatura mínima irreal)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Nenhum resultado\", () => pm.expect(body().total).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/current/history?min_temperature=99",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "current",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "min_temperature",
+                  "value": "99"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Período invertido → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));",
+                  "",
+                  "pm.test(\"Mensagem em português\", () => pm.expect(body().detail).to.include(\"início do período\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/current/history?start=2030-01-02T00:00:00Z&end=2030-01-01T00:00:00Z",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "current",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "start",
+                  "value": "2030-01-02T00:00:00Z"
+                },
+                {
+                  "key": "end",
+                  "value": "2030-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Parâmetro desconhecido → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/current/history?parametro_inexistente=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "current",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "parametro_inexistente",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Previsão horária",
+      "description": "Previsão com passo de uma hora (paginada pela OpenWeather e consolidada pelo ETL).",
+      "item": [
+        {
+          "name": "Listar previsão horária",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Envelope de paginação (items, total, limit, offset)\", () => {",
+                  "    const b = body();",
+                  "    pm.expect(b.items).to.be.an(\"array\");",
+                  "    [\"total\", \"limit\", \"offset\"].forEach((k) => pm.expect(b[k], k).to.be.a(\"number\"));",
+                  "    pm.expect(b.items.length).to.be.at.most(b.limit);",
+                  "});",
+                  "",
+                  "pm.test(\"Ordem cronológica crescente (forecast_at)\", () => {",
+                  "    const t = body().items.map((i) => Date.parse(i.forecast_at));",
+                  "    pm.expect(t).to.eql([...t].sort((a, b) => a - b));",
+                  "});",
+                  "",
+                  "pm.test(\"Campos e faixas\", () => {",
+                  "    body().items.forEach((h) => {",
+                  "        pm.expect(num(h.temperature)).to.be.true;",
+                  "        pm.expect(h.humidity).to.be.within(0, 100);",
+                  "        if (h.pop !== null) pm.expect(h.pop).to.be.within(0, 1);",
+                  "    });",
+                  "});",
+                  "pm.test(\"Há previsões\", () => pm.expect(body().total).to.be.at.least(1));",
+                  "if (strict) {",
+                  "    pm.test(\"3 páginas × 20 horas (paginação 'next' seguida pelo ETL)\", () => {",
+                  "        pm.expect(body().total).to.eql(parseInt(pm.environment.get(\"expectedHourlyTotal\"), 10));",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/forecast/hourly?limit=200",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "forecast",
+                "hourly"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "200"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Filtrar por probabilidade de precipitação",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Todos com pop ≥ 0,5\", () => body().items.forEach((h) => pm.expect(h.pop).to.be.at.least(0.5)));",
+                  "if (strict) {",
+                  "    pm.test(\"Total esperado (pop = hora % 10 / 10; 5 de cada 10 horas ≥ 0,5)\", () => {",
+                  "        pm.expect(body().total).to.eql(parseInt(pm.environment.get(\"expectedHourlyPop50Total\"), 10));",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/forecast/hourly?min_pop=0.5&limit=200",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "forecast",
+                "hourly"
+              ],
+              "query": [
+                {
+                  "key": "min_pop",
+                  "value": "0.5"
+                },
+                {
+                  "key": "limit",
+                  "value": "200"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Ordenação decrescente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Ordem cronológica decrescente (forecast_at)\", () => {",
+                  "    const t = body().items.map((i) => Date.parse(i.forecast_at));",
+                  "    pm.expect(t).to.eql([...t].sort((a, b) => b - a));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/forecast/hourly?order=desc&limit=200",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "forecast",
+                "hourly"
+              ],
+              "query": [
+                {
+                  "key": "order",
+                  "value": "desc"
+                },
+                {
+                  "key": "limit",
+                  "value": "200"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Paginação (limit=5, offset=5)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Página solicitada\", () => {",
+                  "    pm.expect(body().limit).to.eql(5);",
+                  "    pm.expect(body().offset).to.eql(5);",
+                  "    if (body().total >= 10) pm.expect(body().items.length).to.eql(5);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/forecast/hourly?limit=5&offset=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "forecast",
+                "hourly"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                },
+                {
+                  "key": "offset",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "limit acima do máximo → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/forecast/hourly?limit=201",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "forecast",
+                "hourly"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "201"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "min_pop fora da faixa → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/forecast/hourly?min_pop=1.5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "forecast",
+                "hourly"
+              ],
+              "query": [
+                {
+                  "key": "min_pop",
+                  "value": "1.5"
+                }
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Previsão diária",
+      "description": "Previsão com passo de um dia (temperaturas por período, chuva, sol e lua).",
+      "item": [
+        {
+          "name": "Listar previsão diária",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Envelope de paginação (items, total, limit, offset)\", () => {",
+                  "    const b = body();",
+                  "    pm.expect(b.items).to.be.an(\"array\");",
+                  "    [\"total\", \"limit\", \"offset\"].forEach((k) => pm.expect(b[k], k).to.be.a(\"number\"));",
+                  "    pm.expect(b.items.length).to.be.at.most(b.limit);",
+                  "});",
+                  "",
+                  "pm.test(\"Ordem cronológica crescente (forecast_at)\", () => {",
+                  "    const t = body().items.map((i) => Date.parse(i.forecast_at));",
+                  "    pm.expect(t).to.eql([...t].sort((a, b) => a - b));",
+                  "});",
+                  "",
+                  "pm.test(\"Mínima ≤ máxima em cada dia\", () => {",
+                  "    body().items.forEach((d) => {",
+                  "        if (d.temp_min !== null && d.temp_max !== null) pm.expect(d.temp_min).to.be.at.most(d.temp_max);",
+                  "    });",
+                  "});",
+                  "pm.test(\"Há previsões\", () => pm.expect(body().total).to.be.at.least(1));",
+                  "if (strict) {",
+                  "    pm.test(\"Total de dias da fixture\", () => {",
+                  "        pm.expect(body().total).to.eql(parseInt(pm.environment.get(\"expectedDailyTotal\"), 10));",
+                  "    });",
+                  "    pm.test(\"Dados de lua e sol\", () => {",
+                  "        const d = body().items[0];",
+                  "        pm.expect(d.moon_phase).to.eql(0.43);",
+                  "        pm.expect(d.sunrise).to.be.a(\"string\");",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/forecast/daily?limit=200",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "forecast",
+                "daily"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "200"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Filtrar por temperatura máxima do dia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Todos com máxima ≤ 27\", () => body().items.forEach((d) => pm.expect(d.temp_max).to.be.at.most(27)));",
+                  "if (strict) {",
+                  "    pm.test(\"3 dias (máximas 25, 26 e 27)\", () => pm.expect(body().total).to.eql(3));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/forecast/daily?max_temperature=27&limit=200",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "forecast",
+                "daily"
+              ],
+              "query": [
+                {
+                  "key": "max_temperature",
+                  "value": "27"
+                },
+                {
+                  "key": "limit",
+                  "value": "200"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Filtrar por condição",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Todos casam com a condição\", () => {",
+                  "    body().items.forEach((d) => pm.expect(`${d.condition.main} ${d.condition.description}`.toLowerCase()).to.include(\"céu\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/forecast/daily?condition=c%C3%A9u",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "forecast",
+                "daily"
+              ],
+              "query": [
+                {
+                  "key": "condition",
+                  "value": "c%C3%A9u"
+                }
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Alertas",
+      "description": "Alertas meteorológicos oficiais.",
+      "item": [
+        {
+          "name": "Listar alertas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Envelope de paginação (items, total, limit, offset)\", () => {",
+                  "    const b = body();",
+                  "    pm.expect(b.items).to.be.an(\"array\");",
+                  "    [\"total\", \"limit\", \"offset\"].forEach((k) => pm.expect(b[k], k).to.be.a(\"number\"));",
+                  "    pm.expect(b.items.length).to.be.at.most(b.limit);",
+                  "});",
+                  "",
+                  "pm.test(\"Estrutura do alerta\", () => {",
+                  "    body().items.forEach((a) => {",
+                  "        pm.expect(a.alert_id).to.be.a(\"string\");",
+                  "        pm.expect(Date.parse(a.starts_at)).to.be.at.most(Date.parse(a.ends_at));",
+                  "        pm.expect(a.descriptions).to.be.an(\"array\");",
+                  "        pm.expect(a.tags).to.be.an(\"array\");",
+                  "    });",
+                  "});",
+                  "if (strict) {",
+                  "    pm.test(\"Alerta da fixture\", () => {",
+                  "        pm.expect(body().total).to.be.at.least(1);",
+                  "        const a = body().items.find((x) => x.alert_id === \"MOCK-ALERT-1\");",
+                  "        pm.expect(a, \"MOCK-ALERT-1\").to.exist;",
+                  "        pm.expect(a.event).to.eql(\"Tempestade\");",
+                  "        pm.expect(a.sender_name).to.include(\"Defesa Civil\");",
+                  "        pm.expect(a.descriptions.map((d) => d.language)).to.have.members([\"pt-BR\", \"en-GB\"]);",
+                  "        pm.expect(a.tags).to.have.members([\"Thunderstorm\", \"Rain\"]);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/alerts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "alerts"
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Alertas vigentes agora",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Todos vigentes no instante consultado\", () => {",
+                  "    const now = Date.parse(pm.collectionVariables.get(\"nowIso\"));",
+                  "    body().items.forEach((a) => {",
+                  "        pm.expect(Date.parse(a.starts_at)).to.be.at.most(now);",
+                  "        pm.expect(Date.parse(a.ends_at)).to.be.at.least(now);",
+                  "    });",
+                  "});",
+                  "if (strict) {",
+                  "    pm.test(\"Alerta da fixture está vigente\", () => pm.expect(body().total).to.be.at.least(1));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/alerts?active_at={{nowIso}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "alerts"
+              ],
+              "query": [
+                {
+                  "key": "active_at",
+                  "value": "{{nowIso}}"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Alertas vigentes no passado distante (nenhum)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Nenhum resultado\", () => pm.expect(body().total).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/alerts?active_at=2000-01-01T00:00:00Z",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "alerts"
+              ],
+              "query": [
+                {
+                  "key": "active_at",
+                  "value": "2000-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Filtrar por evento inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Nenhum resultado\", () => pm.expect(body().total).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/alerts?event=evento-que-nao-existe",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "alerts"
+              ],
+              "query": [
+                {
+                  "key": "event",
+                  "value": "evento-que-nao-existe"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "active_at sem fuso → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/locations/{{locationId}}/alerts?active_at=2026-11-12T13:00:00",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "locations",
+                "{{locationId}}",
+                "alerts"
+              ],
+              "query": [
+                {
+                  "key": "active_at",
+                  "value": "2026-11-12T13:00:00"
+                }
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Contrato (OpenAPI)",
+      "description": "Contrato publicado e documentação em português.",
+      "item": [
+        {
+          "name": "OpenAPI em português",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Descrição e resumos em português\", () => {",
+                  "    const s = body();",
+                  "    pm.expect(s.info.description).to.include(\"dados climáticos\");",
+                  "    pm.expect(s.paths[\"/v1/locations\"].get.summary).to.eql(\"Lista os locais monitorados\");",
+                  "    pm.expect(s.paths[\"/health\"].get.tags).to.eql([\"Saúde\"]);",
+                  "});",
+                  "pm.test(\"Todos os endpoints documentados\", () => {",
+                  "    const paths = Object.keys(body().paths);",
+                  "    [",
+                  "        \"/health\",",
+                  "        \"/health/ready\",",
+                  "        \"/v1/locations\",",
+                  "        \"/v1/locations/{location_id}\",",
+                  "        \"/v1/locations/{location_id}/current\",",
+                  "        \"/v1/locations/{location_id}/current/history\",",
+                  "        \"/v1/locations/{location_id}/forecast/hourly\",",
+                  "        \"/v1/locations/{location_id}/forecast/daily\",",
+                  "        \"/v1/locations/{location_id}/alerts\",",
+                  "    ].forEach((p) => pm.expect(paths, p).to.include(p));",
+                  "});",
+                  "pm.test(\"Campos de dados em inglês, descrições em português\", () => {",
+                  "    const lat = body().components.schemas.LocationOut.properties.latitude;",
+                  "    pm.expect(lat.description).to.eql(\"Latitude em graus decimais.\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/openapi.json",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "openapi.json"
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Swagger UI",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const strict = pm.environment.get(\"strict\") === \"true\";",
+                  "const body = () => pm.response.json();",
+                  "const num = (v) => typeof v === \"number\";",
+                  "",
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test(\"Content-Type é HTML\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.match(/text\\/html/));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/docs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "docs"
+              ],
+              "query": []
+            },
+            "description": ""
+          }
+        }
+      ]
+    }
+  ]
+}
